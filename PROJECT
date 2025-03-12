@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: lucabernstein-cluster-api-provider-gardener
 repo: github.com/gardener/cluster-api-provider-gardener
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: cluster.x-k8s.io
+  group: infrastructure
+  kind: GardenerShootCluster
+  path: github.com/gardener/cluster-api-provider-gardener/api/v1alpha1
+  version: v1alpha1
 version: "3"
