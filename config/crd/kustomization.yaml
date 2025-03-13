@@ -5,6 +5,10 @@ resources:
 - bases/infrastructure.cluster.x-k8s.io_gardenershootclusters.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
+commonLabels:
+  # The label is a map from a Cluster API contract version to your Custom Resource Definition versions.
+  cluster.x-k8s.io/v1beta1: v1alpha1
+
 patches:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
