@@ -19,9 +19,12 @@ package controller
 import (
 	"context"
 
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,9 +35,10 @@ import (
 
 // GardenerShootClusterReconciler reconciles a GardenerShootCluster object
 type GardenerShootClusterReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Client         client.Client
+	GardenerClient client.Client
+	Scheme         *runtime.Scheme
+	Log            logr.Logger
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
@@ -54,8 +58,11 @@ type GardenerShootClusterReconciler struct {
 func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Log = log.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName)
 
-	var shootCluster infrav1alpha1.GardenerShootCluster
-	if err := r.Get(ctx, req.NamespacedName, &shootCluster); err != nil {
+	var (
+		shootCluster infrav1alpha1.GardenerShootCluster
+		shoot        gardenercorev1beta1.Shoot
+	)
+	if err := r.Client.Get(ctx, req.NamespacedName, &shootCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("resource no longer exists")
 			return ctrl.Result{}, nil
@@ -70,6 +77,30 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	if cluster == nil {
 		r.Log.Info("Cluster Controller has not yet set OwnerRef")
 		return ctrl.Result{}, nil
+	}
+
+	err = r.GardenerClient.Get(ctx, types.NamespacedName{
+		Name:      shootCluster.Name,
+		Namespace: shootCluster.Namespace,
+	}, &shoot)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("Wo Shoot?")
+			shoot := gardenercorev1beta1.Shoot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      shootCluster.Name,
+					Namespace: shootCluster.Namespace,
+				},
+				Spec: shootCluster.Spec,
+			}
+			err = r.GardenerClient.Create(ctx, &shoot)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil

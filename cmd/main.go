@@ -26,11 +26,14 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -51,6 +54,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(scheme))
+
+	utilruntime.Must(gardenercorev1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -63,6 +68,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var gardenerKubeConfigPath string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -81,6 +87,7 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&gardenerKubeConfigPath, "gardener-kubeconfig", "", "Path to the Gardener kube-config")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -202,9 +209,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create client from kubeconfig
+	restConfig, err := clientcmd.BuildConfigFromFlags("", gardenerKubeConfigPath)
+	if err != nil {
+		setupLog.Error(err, "unable to build Gardener rest config")
+		os.Exit(1)
+	}
+
+	gardenerClient, err := client.New(restConfig, client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to build Gardener Kubernetes client")
+	}
+
 	if err = (&controller.GardenerShootClusterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		GardenerClient: gardenerClient,
+		Scheme:         mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster")
 		os.Exit(1)

@@ -35,8 +35,11 @@ type GardenerShootCluster struct {
 	// Specification of the Shoot cluster.
 	// If the object's deletion timestamp is set, this field is immutable.
 	// +optional
-	Spec   gardenercorev1beta1.ShootSpec `json:"spec,omitempty"`
-	Status GardenerShootClusterStatus    `json:"status,omitempty"`
+	// TODO(tobschli): Change this to Shoot spec and build it in the reconciliation.
+	Spec gardenercorev1beta1.ShootSpec `json:"spec,omitempty"`
+	// +optional
+	Project string                     `json:"project,omitempty"`
+	Status  GardenerShootClusterStatus `json:"status,omitempty"`
 }
 
 // GardenerShootClusterStatus defines the observed state of GardenerShootCluster.
