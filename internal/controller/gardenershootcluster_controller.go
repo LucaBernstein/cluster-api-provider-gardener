@@ -19,20 +19,25 @@ package controller
 import (
 	"context"
 
+	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
 
 // GardenerShootClusterReconciler reconciles a GardenerShootCluster object
 type GardenerShootClusterReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Log    logr.Logger
 }
 
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/finalizers,verbs=update
@@ -47,9 +52,25 @@ type GardenerShootClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.2/pkg/reconcile
 func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	r.Log = log.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName)
 
-	// TODO(user): your logic here
+	var shootCluster infrav1alpha1.GardenerShootCluster
+	if err := r.Get(ctx, req.NamespacedName, &shootCluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("resource no longer exists")
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, shootCluster.ObjectMeta)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cluster == nil {
+		r.Log.Info("Cluster Controller has not yet set OwnerRef")
+		return ctrl.Result{}, nil
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -57,7 +78,7 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 // SetupWithManager sets up the controller with the Manager.
 func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.GardenerShootCluster{}).
+		For(&infrav1alpha1.GardenerShootCluster{}).
 		Named("gardenershootcluster").
 		Complete(r)
 }
