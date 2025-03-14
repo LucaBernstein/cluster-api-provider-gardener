@@ -125,7 +125,7 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 			if err := r.GardenerClient.Create(ctx, r.shoot); err != nil {
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{Requeue: true}, nil
 		}
 		return ctrl.Result{}, err
 	}
