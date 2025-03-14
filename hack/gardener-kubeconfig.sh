@@ -2,16 +2,16 @@
 
 # Check if the CLI argument for GARDENER_KUBECONFIG is provided
 if [ -z "$1" ]; then
-echo "Usage: $0 <path_to_kubeconfig>"
-exit 1
+  echo "Usage: $0 <path_to_kubeconfig>"
+  exit 1
 fi
 
 GARDENER_KUBECONFIG=$1
 
 # Check if the kubeconfig file exists
 if [ ! -f "$GARDENER_KUBECONFIG" ]; then
-echo "File $GARDENER_KUBECONFIG does not exist."
-exit 1
+  echo "File $GARDENER_KUBECONFIG does not exist."
+  exit 1
 fi
 
 # Base64 encode the kubeconfig file, whilst replacing the localhost api-server with in cluster api access and print it
