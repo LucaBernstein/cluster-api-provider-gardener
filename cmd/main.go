@@ -95,7 +95,8 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&gardenerKubeConfigPath, "gardener-kubeconfig", "", "Path to the Gardener kube-config")
-	flag.DurationVar(&syncPeriod, "sync-period", time.Minute*10, "The minimum interval at which watched resources are reconciled (e.g. 15m)")
+	flag.DurationVar(&syncPeriod, "sync-period", time.Minute*10,
+		"The minimum interval at which watched resources are reconciled (e.g. 15m)")
 	opts := zap.Options{
 		Development: true,
 	}

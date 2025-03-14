@@ -20,15 +20,20 @@ import (
 	"context"
 
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
@@ -39,6 +44,8 @@ type GardenerShootClusterReconciler struct {
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
+
+	shootCluster *infrav1alpha1.GardenerShootCluster
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
@@ -56,13 +63,11 @@ type GardenerShootClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.2/pkg/reconcile
 func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log = log.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName)
+	r.Log = runtimelog.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName)
 
-	var (
-		shootCluster infrav1alpha1.GardenerShootCluster
-		shoot        gardenercorev1beta1.Shoot
-	)
-	if err := r.Client.Get(ctx, req.NamespacedName, &shootCluster); err != nil {
+	r.Log.Info("Getting GardenerShootCluster object")
+	r.shootCluster = &infrav1alpha1.GardenerShootCluster{}
+	if err := r.Client.Get(ctx, req.NamespacedName, r.shootCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("resource no longer exists")
 			return ctrl.Result{}, nil
@@ -70,32 +75,48 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	}
 
-	cluster, err := util.GetOwnerCluster(ctx, r.Client, shootCluster.ObjectMeta)
+	r.Log.Info("Getting own cluster")
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, r.shootCluster.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if cluster == nil {
 		r.Log.Info("Cluster Controller has not yet set OwnerRef")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true}, nil
 	}
 
-	err = r.GardenerClient.Get(ctx, types.NamespacedName{
-		Name:      shootCluster.Name,
-		Namespace: shootCluster.Namespace,
-	}, &shoot)
+	// Handle deleted clusters
+	if !r.shootCluster.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.reconcileDelete(ctx)
+	}
 
+	// Handle non-deleted clusters
+	return r.reconcile(ctx)
+}
+
+func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
+	r.Log.Info("Reconciling GardenerShootCluster")
+
+	r.Log.Info("Adding finalizer to GardenerShootCluster")
+	patch := client.MergeFrom(r.shootCluster.DeepCopy())
+	if controllerutil.AddFinalizer(r.shootCluster, v1beta1.ClusterFinalizer) {
+		if err := r.Client.Patch(ctx, r.shootCluster, patch); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	shoot := &gardenercorev1beta1.Shoot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.shootCluster.Name,
+			Namespace: r.shootCluster.Namespace,
+		},
+		Spec: r.shootCluster.Spec,
+	}
+	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			r.Log.Info("Wo Shoot?")
-			shoot := gardenercorev1beta1.Shoot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      shootCluster.Name,
-					Namespace: shootCluster.Namespace,
-				},
-				Spec: shootCluster.Spec,
-			}
-			err = r.GardenerClient.Create(ctx, &shoot)
-			if err != nil {
+			r.Log.Info("Shoot not found, creating it")
+			if err := r.GardenerClient.Create(ctx, shoot); err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
@@ -103,7 +124,67 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	}
 
+	if err := r.patchStatus(ctx, shoot); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.Log.Info("Successfully reconciled GardenerShootCluster")
+	record.Event(r.shootCluster, "GardenerShootClusterReconcile", "Reconciled")
 	return ctrl.Result{}, nil
+}
+
+func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) error {
+	r.Log.Info("Reconciling Delete GardenerShootCluster")
+
+	shoot := &gardenercorev1beta1.Shoot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.shootCluster.Name,
+			Namespace: r.shootCluster.Namespace,
+		},
+	}
+	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		r.Log.Info("Shoot not found")
+	}
+
+	if !apierrors.IsNotFound(err) {
+		patch := client.MergeFrom(shoot.DeepCopy())
+		annotations.AddAnnotations(shoot, map[string]string{constants.ConfirmationDeletion: "true"})
+		if err := r.GardenerClient.Patch(ctx, shoot, patch); err != nil {
+			return err
+		}
+		if err := r.GardenerClient.Delete(ctx, shoot); err != nil {
+			return err
+		}
+	}
+
+	patch := client.MergeFrom(r.shootCluster.DeepCopy())
+	if controllerutil.RemoveFinalizer(r.shootCluster, v1beta1.ClusterFinalizer) {
+		err := r.Client.Patch(ctx, r.shootCluster, patch)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := r.patchStatus(ctx, shoot); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	r.Log.Info("Successfully reconciled deletion of GardenerShootCluster")
+	record.Event(r.shootCluster, "GardenerShootClusterReconcile", "Reconciled")
+	return nil
+}
+
+func (r *GardenerShootClusterReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) error {
+	patch := client.MergeFrom(r.shootCluster.DeepCopy())
+	if shoot != nil {
+		shootStatus := gardener.ComputeShootStatus(shoot.Status.LastOperation, shoot.Status.LastErrors, shoot.Status.Conditions...)
+		r.shootCluster.Status.Ready = shootStatus == gardener.ShootStatusHealthy
+	}
+	return r.Client.Status().Patch(ctx, r.shootCluster, patch)
 }
 
 // SetupWithManager sets up the controller with the Manager.
