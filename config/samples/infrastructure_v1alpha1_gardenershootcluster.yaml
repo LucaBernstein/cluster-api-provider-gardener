@@ -3,9 +3,6 @@ kind: Cluster
 metadata:
   name: hello-gardener
 spec:
-  clusterNetwork:
-    pods:
-      cidrBlocks: ["192.168.0.0/16"]
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
     kind: GardenerShootCluster
@@ -18,6 +15,7 @@ metadata:
     app.kubernetes.io/name: cluster-api-provider-gardener
     app.kubernetes.io/managed-by: kustomize
   name: hello-gardener
+project: local
 spec:
   cloudProfile:
     kind: CloudProfile

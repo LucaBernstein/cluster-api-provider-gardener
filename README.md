@@ -11,7 +11,9 @@
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
+- a (local) Gardener cluster
 
+The local-setup assumes, that you deploy Cluster-API next to the virtual Garden-Cluster, which is _not_ intended for production.
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
 
@@ -32,7 +34,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=localhost:5001/cluster-api-provider-gardener/controller:latest
+make deploy IMG=localhost:5001/cluster-api-provider-gardener/controller:latest GARDENER_KUBECONFIG=<path/to/gardener/kubeconfig.yaml>
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
