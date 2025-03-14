@@ -101,7 +101,7 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Handle deleted clusters
 	if !r.shootCluster.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.reconcileDelete(ctx)
+		return r.reconcileDelete(ctx)
 	}
 
 	// Handle non-deleted clusters
@@ -140,43 +140,44 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) error {
+func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Delete GardenerShootCluster")
 
 	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return err
+			return ctrl.Result{}, err
 		}
 		r.Log.Info("Shoot not found")
+	}
+
+	if _, err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
 	}
 
 	if !apierrors.IsNotFound(err) {
 		patch := client.MergeFrom(r.shoot.DeepCopy())
 		annotations.AddAnnotations(r.shoot, map[string]string{constants.ConfirmationDeletion: "true"})
-		if err := r.GardenerClient.Patch(ctx, r.shoot, patch); err != nil {
-			return err
+		if err := r.GardenerClient.Patch(ctx, r.shoot, patch); err != nil && !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
 		}
-		if err := r.GardenerClient.Delete(ctx, r.shoot); err != nil {
-			return err
+		if err := r.GardenerClient.Delete(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
 		}
+		return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Minute}, nil
 	}
 
 	patch := client.MergeFrom(r.shootCluster.DeepCopy())
 	if controllerutil.RemoveFinalizer(r.shootCluster, v1beta1.ClusterFinalizer) {
 		err := r.Client.Patch(ctx, r.shootCluster, patch)
 		if err != nil {
-			return err
+			return ctrl.Result{}, err
 		}
-	}
-
-	if _, err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
-		return err
 	}
 
 	r.Log.Info("Successfully reconciled deletion of GardenerShootCluster")
 	record.Event(r.shootCluster, "GardenerShootClusterReconcile", "Reconciled")
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func (r *GardenerShootClusterReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) (bool, error) {
