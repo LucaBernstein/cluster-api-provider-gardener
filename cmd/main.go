@@ -21,6 +21,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -33,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -63,15 +65,18 @@ func init() {
 
 // nolint:gocyclo
 func main() {
-	var metricsAddr string
-	var metricsCertPath, metricsCertName, metricsCertKey string
-	var webhookCertPath, webhookCertName, webhookCertKey string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	var gardenerKubeConfigPath string
-	var tlsOpts []func(*tls.Config)
+	var (
+		metricsAddr                                      string
+		metricsCertPath, metricsCertName, metricsCertKey string
+		webhookCertPath, webhookCertName, webhookCertKey string
+		enableLeaderElection                             bool
+		probeAddr                                        string
+		secureMetrics                                    bool
+		enableHTTP2                                      bool
+		gardenerKubeConfigPath                           string
+		tlsOpts                                          []func(*tls.Config)
+		syncPeriod                                       time.Duration
+	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -90,6 +95,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&gardenerKubeConfigPath, "gardener-kubeconfig", "", "Path to the Gardener kube-config")
+	flag.DurationVar(&syncPeriod, "sync-period", time.Minute*10, "The minimum interval at which watched resources are reconciled (e.g. 15m)")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -205,6 +211,9 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
+		Cache: cache.Options{
+			SyncPeriod: &syncPeriod,
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
