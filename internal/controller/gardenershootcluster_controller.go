@@ -46,6 +46,7 @@ type GardenerShootClusterReconciler struct {
 	Log            logr.Logger
 
 	shootCluster *infrav1alpha1.GardenerShootCluster
+	shoot        *gardenercorev1beta1.Shoot
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
@@ -85,6 +86,18 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	shootNamespace := r.shootCluster.Namespace
+	if len(r.shootCluster.Project) > 0 {
+		shootNamespace = "garden-" + r.shootCluster.Project
+	}
+	r.shoot = &gardenercorev1beta1.Shoot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.shootCluster.Name,
+			Namespace: shootNamespace,
+		},
+		Spec: r.shootCluster.Spec,
+	}
+
 	// Handle deleted clusters
 	if !r.shootCluster.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, r.reconcileDelete(ctx)
@@ -105,18 +118,11 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 		}
 	}
 
-	shoot := &gardenercorev1beta1.Shoot{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.shootCluster.Name,
-			Namespace: r.shootCluster.Namespace,
-		},
-		Spec: r.shootCluster.Spec,
-	}
-	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot)
+	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("Shoot not found, creating it")
-			if err := r.GardenerClient.Create(ctx, shoot); err != nil {
+			if err := r.GardenerClient.Create(ctx, r.shoot); err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
@@ -124,7 +130,7 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	if err := r.patchStatus(ctx, shoot); err != nil {
+	if err := r.patchStatus(ctx, r.shoot); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -136,13 +142,7 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) error {
 	r.Log.Info("Reconciling Delete GardenerShootCluster")
 
-	shoot := &gardenercorev1beta1.Shoot{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.shootCluster.Name,
-			Namespace: r.shootCluster.Namespace,
-		},
-	}
-	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot)
+	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
@@ -151,12 +151,12 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) er
 	}
 
 	if !apierrors.IsNotFound(err) {
-		patch := client.MergeFrom(shoot.DeepCopy())
-		annotations.AddAnnotations(shoot, map[string]string{constants.ConfirmationDeletion: "true"})
-		if err := r.GardenerClient.Patch(ctx, shoot, patch); err != nil {
+		patch := client.MergeFrom(r.shoot.DeepCopy())
+		annotations.AddAnnotations(r.shoot, map[string]string{constants.ConfirmationDeletion: "true"})
+		if err := r.GardenerClient.Patch(ctx, r.shoot, patch); err != nil {
 			return err
 		}
-		if err := r.GardenerClient.Delete(ctx, shoot); err != nil {
+		if err := r.GardenerClient.Delete(ctx, r.shoot); err != nil {
 			return err
 		}
 	}
@@ -169,7 +169,7 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) er
 		}
 	}
 
-	if err := r.patchStatus(ctx, shoot); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 
