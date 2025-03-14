@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -130,8 +131,8 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	if err := r.patchStatus(ctx, r.shoot); err != nil {
-		return ctrl.Result{}, err
+	if isReady, err := r.patchStatus(ctx, r.shoot); err != nil {
+		return ctrl.Result{Requeue: !isReady, RequeueAfter: 30 * time.Second}, err
 	}
 
 	r.Log.Info("Successfully reconciled GardenerShootCluster")
@@ -169,7 +170,7 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) er
 		}
 	}
 
-	if err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
+	if _, err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 
@@ -178,13 +179,13 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) er
 	return nil
 }
 
-func (r *GardenerShootClusterReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) error {
+func (r *GardenerShootClusterReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) (bool, error) {
 	patch := client.MergeFrom(r.shootCluster.DeepCopy())
 	if shoot != nil {
 		shootStatus := gardener.ComputeShootStatus(shoot.Status.LastOperation, shoot.Status.LastErrors, shoot.Status.Conditions...)
 		r.shootCluster.Status.Ready = shootStatus == gardener.ShootStatusHealthy
 	}
-	return r.Client.Status().Patch(ctx, r.shootCluster, patch)
+	return r.shootCluster.Status.Ready, r.Client.Status().Patch(ctx, r.shootCluster, patch)
 }
 
 // SetupWithManager sets up the controller with the Manager.
