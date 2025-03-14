@@ -11,10 +11,19 @@ spec:
     kind: GardenerShootCluster
     listKind: GardenerShootClusterList
     plural: gardenershootclusters
+    shortNames:
+    - gsc
     singular: gardenershootcluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GardenerShootCluster represents a Shoot cluster.
