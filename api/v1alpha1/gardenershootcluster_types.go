@@ -28,8 +28,8 @@ import (
 // +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// GardenerShootCluster represents a Shoot cluster.
-type GardenerShootCluster struct {
+// GardenerShootControlPlane represents a Shoot cluster.
+type GardenerShootControlPlane struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object metadata.
 	// +optional
@@ -41,13 +41,13 @@ type GardenerShootCluster struct {
 	// TODO(tobschli): Change this to Shoot spec and build it in the reconciliation.
 	Spec gardenercorev1beta1.ShootSpec `json:"spec,omitempty"`
 	// +optional
-	Project string                     `json:"project,omitempty"`
-	Status  GardenerShootClusterStatus `json:"status,omitempty"`
+	Project string                          `json:"project,omitempty"`
+	Status  GardenerShootControlPlaneStatus `json:"status,omitempty"`
 }
 
-// GardenerShootClusterStatus defines the observed state of GardenerShootCluster.
-type GardenerShootClusterStatus struct {
-	// Ready denotes that the foo cluster infrastructure is fully provisioned.
+// GardenerShootControlPlaneStatus defines the observed state of GardenerShootControlPlane.
+type GardenerShootControlPlaneStatus struct {
+	// Ready denotes that the foo cluster control plane is fully provisioned.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the infra cluster.
@@ -56,15 +56,15 @@ type GardenerShootClusterStatus struct {
 
 // +kubebuilder:object:root=true
 
-// GardenerShootClusterList contains a list of GardenerShootCluster.
-type GardenerShootClusterList struct {
+// GardenerShootControlPlaneList contains a list of GardenerShootControlPlane.
+type GardenerShootControlPlaneList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []GardenerShootCluster `json:"items"`
+	Items []GardenerShootControlPlane `json:"items"`
 }
 
 func init() {
-	objectTypes = append(objectTypes, &GardenerShootCluster{}, &GardenerShootClusterList{})
+	objectTypes = append(objectTypes, &GardenerShootControlPlane{}, &GardenerShootControlPlaneList{})
 }

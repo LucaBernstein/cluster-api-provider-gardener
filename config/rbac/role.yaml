@@ -14,9 +14,9 @@ rules:
   - list
   - watch
 - apiGroups:
-  - infrastructure.cluster.x-k8s.io
+  - controlplane.cluster.x-k8s.io
   resources:
-  - gardenershootclusters
+  - gardenershootcontrolplanes
   verbs:
   - create
   - delete
@@ -26,15 +26,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - infrastructure.cluster.x-k8s.io
+  - controlplane.cluster.x-k8s.io
   resources:
-  - gardenershootclusters/finalizers
+  - gardenershootcontrolplanes/finalizers
   verbs:
   - update
 - apiGroups:
-  - infrastructure.cluster.x-k8s.io
+  - controlplane.cluster.x-k8s.io
   resources:
-  - gardenershootclusters/status
+  - gardenershootcontrolplanes/status
   verbs:
   - get
   - patch

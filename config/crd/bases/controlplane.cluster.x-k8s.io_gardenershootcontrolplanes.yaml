@@ -4,16 +4,16 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: gardenershootclusters.infrastructure.cluster.x-k8s.io
+  name: gardenershootcontrolplanes.controlplane.cluster.x-k8s.io
 spec:
-  group: infrastructure.cluster.x-k8s.io
+  group: controlplane.cluster.x-k8s.io
   names:
-    kind: GardenerShootCluster
-    listKind: GardenerShootClusterList
-    plural: gardenershootclusters
+    kind: GardenerShootControlPlane
+    listKind: GardenerShootControlPlaneList
+    plural: gardenershootcontrolplanes
     shortNames:
     - gsc
-    singular: gardenershootcluster
+    singular: gardenershootcontrolplane
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -26,7 +26,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GardenerShootCluster represents a Shoot cluster.
+        description: GardenerShootControlPlane represents a Shoot cluster.
         properties:
           apiVersion:
             description: |-
@@ -2420,12 +2420,12 @@ spec:
             - region
             type: object
           status:
-            description: GardenerShootClusterStatus defines the observed state of
-              GardenerShootCluster.
+            description: GardenerShootControlPlaneStatus defines the observed state
+              of GardenerShootControlPlane.
             properties:
               ready:
                 description: |-
-                  Ready denotes that the foo cluster infrastructure is fully provisioned.
+                  Ready denotes that the foo cluster control plane is fully provisioned.
                   NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
                   The value of this field is never updated after provisioning is completed. Please use conditions
                   to check the operational state of the infra cluster.

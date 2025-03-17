@@ -39,37 +39,37 @@ import (
 	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
 
-// GardenerShootClusterReconciler reconciles a GardenerShootCluster object
-type GardenerShootClusterReconciler struct {
+// GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
+type GardenerShootControlPlaneReconciler struct {
 	Client         client.Client
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
 
-	shootCluster *infrav1alpha1.GardenerShootCluster
-	shoot        *gardenercorev1beta1.Shoot
+	shootControlPlane *infrav1alpha1.GardenerShootControlPlane
+	shoot             *gardenercorev1beta1.Shoot
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the GardenerShootCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
+// the GardenerShootControlPlane object against the actual control plane state, and then
+// perform operations to make the control plane state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.2/pkg/reconcile
-func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log = runtimelog.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName)
+func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Log = runtimelog.FromContext(ctx).WithValues("gardenershootcontrolplane", req.NamespacedName)
 
-	r.Log.Info("Getting GardenerShootCluster object")
-	r.shootCluster = &infrav1alpha1.GardenerShootCluster{}
-	if err := r.Client.Get(ctx, req.NamespacedName, r.shootCluster); err != nil {
+	r.Log.Info("Getting GardenerShootControlPlane object")
+	r.shootControlPlane = &infrav1alpha1.GardenerShootControlPlane{}
+	if err := r.Client.Get(ctx, req.NamespacedName, r.shootControlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("resource no longer exists")
 			return ctrl.Result{}, nil
@@ -78,7 +78,7 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	r.Log.Info("Getting own cluster")
-	cluster, err := util.GetOwnerCluster(ctx, r.Client, r.shootCluster.ObjectMeta)
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, r.shootControlPlane.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -87,20 +87,20 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	shootNamespace := r.shootCluster.Namespace
-	if len(r.shootCluster.Project) > 0 {
-		shootNamespace = "garden-" + r.shootCluster.Project
+	shootNamespace := r.shootControlPlane.Namespace
+	if len(r.shootControlPlane.Project) > 0 {
+		shootNamespace = "garden-" + r.shootControlPlane.Project
 	}
 	r.shoot = &gardenercorev1beta1.Shoot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.shootCluster.Name,
+			Name:      r.shootControlPlane.Name,
 			Namespace: shootNamespace,
 		},
-		Spec: r.shootCluster.Spec,
+		Spec: r.shootControlPlane.Spec,
 	}
 
 	// Handle deleted clusters
-	if !r.shootCluster.DeletionTimestamp.IsZero() {
+	if !r.shootControlPlane.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx)
 	}
 
@@ -108,13 +108,13 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	return r.reconcile(ctx)
 }
 
-func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
-	r.Log.Info("Reconciling GardenerShootCluster")
+func (r *GardenerShootControlPlaneReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
+	r.Log.Info("Reconciling GardenerShootControlPlane")
 
-	r.Log.Info("Adding finalizer to GardenerShootCluster")
-	patch := client.MergeFrom(r.shootCluster.DeepCopy())
-	if controllerutil.AddFinalizer(r.shootCluster, v1beta1.ClusterFinalizer) {
-		if err := r.Client.Patch(ctx, r.shootCluster, patch); err != nil {
+	r.Log.Info("Adding finalizer to GardenerShootControlPlane")
+	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
+	if controllerutil.AddFinalizer(r.shootControlPlane, v1beta1.ClusterFinalizer) {
+		if err := r.Client.Patch(ctx, r.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -135,13 +135,13 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context) (ctrl.Re
 		return ctrl.Result{Requeue: !isReady, RequeueAfter: 30 * time.Second}, err
 	}
 
-	r.Log.Info("Successfully reconciled GardenerShootCluster")
-	record.Event(r.shootCluster, "GardenerShootClusterReconcile", "Reconciled")
+	r.Log.Info("Successfully reconciled GardenerShootControlPlane")
+	record.Event(r.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) (ctrl.Result, error) {
-	r.Log.Info("Reconciling Delete GardenerShootCluster")
+func (r *GardenerShootControlPlaneReconciler) reconcileDelete(ctx context.Context) (ctrl.Result, error) {
+	r.Log.Info("Reconciling Delete GardenerShootControlPlane")
 
 	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
 	if err != nil {
@@ -167,32 +167,32 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context) (c
 		return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	patch := client.MergeFrom(r.shootCluster.DeepCopy())
-	if controllerutil.RemoveFinalizer(r.shootCluster, v1beta1.ClusterFinalizer) {
-		err := r.Client.Patch(ctx, r.shootCluster, patch)
+	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
+	if controllerutil.RemoveFinalizer(r.shootControlPlane, v1beta1.ClusterFinalizer) {
+		err := r.Client.Patch(ctx, r.shootControlPlane, patch)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
-	r.Log.Info("Successfully reconciled deletion of GardenerShootCluster")
-	record.Event(r.shootCluster, "GardenerShootClusterReconcile", "Reconciled")
+	r.Log.Info("Successfully reconciled deletion of GardenerShootControlPlane")
+	record.Event(r.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootClusterReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) (bool, error) {
-	patch := client.MergeFrom(r.shootCluster.DeepCopy())
+func (r *GardenerShootControlPlaneReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) (bool, error) {
+	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
 	if shoot != nil {
 		shootStatus := gardener.ComputeShootStatus(shoot.Status.LastOperation, shoot.Status.LastErrors, shoot.Status.Conditions...)
-		r.shootCluster.Status.Ready = shootStatus == gardener.ShootStatusHealthy
+		r.shootControlPlane.Status.Ready = shootStatus == gardener.ShootStatusHealthy
 	}
-	return r.shootCluster.Status.Ready, r.Client.Status().Patch(ctx, r.shootCluster, patch)
+	return r.shootControlPlane.Status.Ready, r.Client.Status().Patch(ctx, r.shootControlPlane, patch)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1alpha1.GardenerShootCluster{}).
-		Named("gardenershootcluster").
+		For(&infrav1alpha1.GardenerShootControlPlane{}).
+		Named("gardenershootcontrolplane").
 		Complete(r)
 }
