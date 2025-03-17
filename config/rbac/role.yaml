@@ -5,6 +5,18 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
@@ -39,3 +51,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - core.gardener.cloud
+  resources:
+  - shoots/viewerkubeconfig
+  verbs:
+  - create
+  - get
+  - list
+  - watch
