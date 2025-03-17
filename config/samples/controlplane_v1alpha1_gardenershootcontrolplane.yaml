@@ -15,33 +15,34 @@ metadata:
     app.kubernetes.io/name: cluster-api-provider-gardener
     app.kubernetes.io/managed-by: kustomize
   name: hello-gardener
-project: local
 spec:
-  cloudProfile:
-    kind: CloudProfile
-    name: local
-  secretBindingName: local # dummy, doesn't contain any credentials
-  region: local
-  networking:
-    type: calico
-    nodes: 10.10.0.0/16
-  provider:
-    type: local
-    workers:
-      - name: local
-        machine:
-          type: local
-        cri:
-          name: containerd
-        minimum: 1
-        maximum: 2
-        maxSurge: 1
-        maxUnavailable: 0
-  kubernetes:
-    kubelet:
-      seccompDefault: true
-      serializeImagePulls: false
-      registryPullQPS: 10
-      registryBurst: 20
-      protectKernelDefaults: true
-      streamingConnectionIdleTimeout: 5m
+  project: local
+  shootSpec:
+    cloudProfile:
+      kind: CloudProfile
+      name: local
+    secretBindingName: local # dummy, doesn't contain any credentials
+    region: local
+    networking:
+      type: calico
+      nodes: 10.10.0.0/16
+    provider:
+      type: local
+      workers:
+        - name: local
+          machine:
+            type: local
+          cri:
+            name: containerd
+          minimum: 1
+          maximum: 2
+          maxSurge: 1
+          maxUnavailable: 0
+    kubernetes:
+      kubelet:
+        seccompDefault: true
+        serializeImagePulls: false
+        registryPullQPS: 10
+        registryBurst: 20
+        protectKernelDefaults: true
+        streamingConnectionIdleTimeout: 5m
