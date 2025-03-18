@@ -43,7 +43,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
@@ -57,7 +57,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
-	utilruntime.Must(infrastructurev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev1alpha1.AddToScheme(scheme))
 
 	utilruntime.Must(gardenercorev1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
@@ -235,12 +235,12 @@ func main() {
 		setupLog.Error(err, "unable to build Gardener Kubernetes client")
 	}
 
-	if err = (&controller.GardenerShootClusterReconciler{
+	if err = (&controller.GardenerShootControlPlaneReconciler{
 		Client:         mgr.GetClient(),
 		GardenerClient: gardenerClient,
 		Scheme:         mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster")
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

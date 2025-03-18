@@ -5,18 +5,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - cluster.x-k8s.io
+  - ""
   resources:
-  - clusters
-  - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - gardenershootclusters
+  - secrets
   verbs:
   - create
   - delete
@@ -26,16 +17,46 @@ rules:
   - update
   - watch
 - apiGroups:
-  - infrastructure.cluster.x-k8s.io
+  - cluster.x-k8s.io
   resources:
-  - gardenershootclusters/finalizers
+  - clusters
+  - clusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - gardenershootcontrolplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - gardenershootcontrolplanes/finalizers
   verbs:
   - update
 - apiGroups:
-  - infrastructure.cluster.x-k8s.io
+  - controlplane.cluster.x-k8s.io
   resources:
-  - gardenershootclusters/status
+  - gardenershootcontrolplanes/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - core.gardener.cloud
+  resources:
+  - shoots/viewerkubeconfig
+  verbs:
+  - create
+  - get
+  - list
+  - watch

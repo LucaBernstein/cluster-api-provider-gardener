@@ -27,10 +27,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
 
-var _ = Describe("GardenerShootCluster Controller", func() {
+var _ = Describe("GardenerShootControlPlane Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,13 +40,13 @@ var _ = Describe("GardenerShootCluster Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		gardenershootcluster := &infrastructurev1alpha1.GardenerShootCluster{}
+		gardenershootcontrolplane := &controlplanev1alpha1.GardenerShootControlPlane{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind GardenerShootCluster")
-			err := k8sClient.Get(ctx, typeNamespacedName, gardenershootcluster)
+			By("creating the custom resource for the Kind GardenerShootControlPlane")
+			err := k8sClient.Get(ctx, typeNamespacedName, gardenershootcontrolplane)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &infrastructurev1alpha1.GardenerShootCluster{
+				resource := &controlplanev1alpha1.GardenerShootControlPlane{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,16 +59,16 @@ var _ = Describe("GardenerShootCluster Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &infrastructurev1alpha1.GardenerShootCluster{}
+			resource := &controlplanev1alpha1.GardenerShootControlPlane{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance GardenerShootCluster")
+			By("Cleanup the specific resource instance GardenerShootControlPlane")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &GardenerShootClusterReconciler{
+			controllerReconciler := &GardenerShootControlPlaneReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
