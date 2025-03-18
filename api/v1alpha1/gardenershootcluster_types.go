@@ -17,8 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
 // +kubebuilder:object:root=true
@@ -86,6 +87,7 @@ type GardenerShootControlPlaneStatus struct {
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the control plane.
+	// +optional
 	Initialized bool `json:"initialized"`
 
 	// ready denotes that the foo control plane is ready to serve requests.

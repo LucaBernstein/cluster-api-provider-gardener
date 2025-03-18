@@ -19,18 +19,14 @@ package controller
 import (
 	"context"
 	"fmt"
-	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 	"time"
 
-	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
-	"github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -41,6 +37,10 @@ import (
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/utils/gardener"
 )
 
 // GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
@@ -48,8 +48,13 @@ type GardenerShootControlPlaneReconciler struct {
 	Client         client.Client
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
+}
 
-	// TODO(tobschli): Move this into the reconciliation loop, as one reconciler does not only reconcile one object
+type ControlPlaneContext struct {
+	log logr.Logger
+	ctx context.Context
+
+	cluster           *v1beta1.Cluster
 	shootControlPlane *infrav1alpha1.GardenerShootControlPlane
 	shoot             *gardenercorev1beta1.Shoot
 }
@@ -73,9 +78,14 @@ type GardenerShootControlPlaneReconciler struct {
 func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := runtimelog.FromContext(ctx).WithValues("gardenershootcontrolplane", req.NamespacedName)
 
+	cpc := ControlPlaneContext{
+		log: log,
+		ctx: ctx,
+	}
+
 	log.Info("Getting GardenerShootControlPlane object")
-	r.shootControlPlane = &infrav1alpha1.GardenerShootControlPlane{}
-	if err := r.Client.Get(ctx, req.NamespacedName, r.shootControlPlane); err != nil {
+	cpc.shootControlPlane = &infrav1alpha1.GardenerShootControlPlane{}
+	if err := r.Client.Get(cpc.ctx, req.NamespacedName, cpc.shootControlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("resource no longer exists")
 			return ctrl.Result{}, nil
@@ -84,54 +94,54 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 	}
 
 	log.Info("Getting own cluster")
-	cluster, err := util.GetOwnerCluster(ctx, r.Client, r.shootControlPlane.ObjectMeta)
+	var err error
+	cpc.cluster, err = util.GetOwnerCluster(cpc.ctx, r.Client, cpc.shootControlPlane.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if cluster == nil {
+	if cpc.cluster == nil {
 		log.Info("Cluster Controller has not yet set OwnerRef")
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	shootNamespace := r.shootControlPlane.Namespace
-	if len(r.shootControlPlane.Spec.Project) > 0 {
-		shootNamespace = "garden-" + r.shootControlPlane.Spec.Project
+	shootNamespace := cpc.shootControlPlane.Namespace
+	if len(cpc.shootControlPlane.Spec.Project) > 0 {
+		shootNamespace = "garden-" + cpc.shootControlPlane.Spec.Project
 	}
-	r.shoot = &gardenercorev1beta1.Shoot{
+	cpc.shoot = &gardenercorev1beta1.Shoot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.shootControlPlane.Name,
+			Name:      cpc.shootControlPlane.Name,
 			Namespace: shootNamespace,
 		},
-		Spec: r.shootControlPlane.Spec.ShootSpec,
+		Spec: cpc.shootControlPlane.Spec.ShootSpec,
 	}
 
 	// Handle deleted clusters
-	if !r.shootControlPlane.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, log)
+	if !cpc.shootControlPlane.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(cpc)
 	}
 
 	// Handle non-deleted clusters
-	return r.reconcile(ctx, log, cluster)
+	return r.reconcile(cpc)
 }
 
-func (r *GardenerShootControlPlaneReconciler) reconcile(ctx context.Context, log logr.Logger, cluster *v1beta1.Cluster) (ctrl.Result, error) {
+func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext) (ctrl.Result, error) {
+	log := cpc.log
 	log.Info("Reconciling GardenerShootControlPlane")
 
-	// TODO(tobschli): This fails in the beginning, because some fields in the status are not set, therefore the patch is rejected.
-	// TODO(tobschli): Somehow this resolves itself after a few reconciliations.
 	log.Info("Adding finalizer to GardenerShootControlPlane")
-	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
-	if controllerutil.AddFinalizer(r.shootControlPlane, v1beta1.ClusterFinalizer) {
-		if err := r.Client.Patch(ctx, r.shootControlPlane, patch); err != nil {
+	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	if controllerutil.AddFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
-	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
+	err := r.GardenerClient.Get(cpc.ctx, client.ObjectKeyFromObject(cpc.shoot), cpc.shoot)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("Shoot not found, creating it")
-			if err := r.GardenerClient.Create(ctx, r.shoot); err != nil {
+			if err := r.GardenerClient.Create(cpc.ctx, cpc.shoot); err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{Requeue: true}, nil
@@ -139,13 +149,13 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(ctx context.Context, log
 		return ctrl.Result{}, err
 	}
 
-	if isReady, err := r.patchStatus(ctx, r.shoot); err != nil {
-		return ctrl.Result{Requeue: !isReady, RequeueAfter: 30 * time.Second}, err
+	if err := r.patchStatus(cpc); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	if r.shootControlPlane.Status.Initialized {
+	if cpc.shootControlPlane.Status.Initialized {
 		log.Info("Reconcile Shoot Access for ClusterAPI")
-		err = r.reconcileShootAccess(ctx, cluster)
+		err = r.reconcileShootAccess(cpc)
 		if err != nil {
 			log.Error(err, "Error reconciling Shoot Access for ClusterAPI")
 			return ctrl.Result{}, err
@@ -153,16 +163,17 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(ctx context.Context, log
 	}
 
 	log.Info("Successfully reconciled GardenerShootControlPlane")
-	record.Event(r.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
+	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootControlPlaneReconciler) reconcileDelete(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
+func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneContext) (ctrl.Result, error) {
+	log := cpc.log
 	log.Info("Reconciling Delete GardenerShootControlPlane")
 
 	// TODO(tobschli): Delete Shoot Access secret
 
-	err := r.GardenerClient.Get(ctx, client.ObjectKeyFromObject(r.shoot), r.shoot)
+	err := r.GardenerClient.Get(cpc.ctx, client.ObjectKeyFromObject(cpc.shoot), cpc.shoot)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -170,44 +181,44 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(ctx context.Contex
 		log.Info("Shoot not found")
 	}
 
-	if _, err := r.patchStatus(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.patchStatus(cpc); err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
 
 	if !apierrors.IsNotFound(err) {
-		patch := client.MergeFrom(r.shoot.DeepCopy())
-		annotations.AddAnnotations(r.shoot, map[string]string{constants.ConfirmationDeletion: "true"})
-		if err := r.GardenerClient.Patch(ctx, r.shoot, patch); err != nil && !apierrors.IsNotFound(err) {
+		patch := client.MergeFrom(cpc.shoot.DeepCopy())
+		annotations.AddAnnotations(cpc.shoot, map[string]string{constants.ConfirmationDeletion: "true"})
+		if err := r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patch); err != nil && !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		if err := r.GardenerClient.Delete(ctx, r.shoot); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.GardenerClient.Delete(cpc.ctx, cpc.shoot); err != nil && !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true, RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
-	if controllerutil.RemoveFinalizer(r.shootControlPlane, v1beta1.ClusterFinalizer) {
-		err := r.Client.Patch(ctx, r.shootControlPlane, patch)
+	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	if controllerutil.RemoveFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+		err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
 	log.Info("Successfully reconciled deletion of GardenerShootControlPlane")
-	record.Event(r.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
+	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(ctx context.Context, cluster *v1beta1.Cluster) error {
-	secret := newShootAccessSecret(cluster)
-	err := r.Client.Get(ctx, client.ObjectKeyFromObject(secret), secret)
+func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPlaneContext) error {
+	secret := newShootAccessSecret(cpc.cluster)
+	err := r.Client.Get(cpc.ctx, client.ObjectKeyFromObject(secret), secret)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
 		// Create (empty secret)
-		err = r.Client.Create(ctx, secret)
+		err = r.Client.Create(cpc.ctx, secret)
 		if err != nil {
 			return err
 		}
@@ -218,14 +229,14 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(ctx context.C
 			ExpirationSeconds: ptr.To(int64(6000)),
 		},
 	}
-	if err := r.Client.SubResource("viewerkubeconfig").Create(ctx, r.shoot, viewerKubeconfigRequest); err != nil {
+	if err := r.Client.SubResource("viewerkubeconfig").Create(cpc.ctx, cpc.shoot, viewerKubeconfigRequest); err != nil {
 		return err
 	}
 
 	secret.Data = make(map[string][]byte)
 	secret.Data["value"] = viewerKubeconfigRequest.Status.Kubeconfig
 
-	return r.Client.Update(ctx, secret)
+	return r.Client.Update(cpc.ctx, secret)
 }
 
 func newShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
@@ -242,15 +253,16 @@ func newShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 	}
 }
 
-func (r *GardenerShootControlPlaneReconciler) patchStatus(ctx context.Context, shoot *gardenercorev1beta1.Shoot) (bool, error) {
-	patch := client.MergeFrom(r.shootControlPlane.DeepCopy())
-	r.shootControlPlane.Status.Initialized = false
-	if shoot != nil {
-		shootStatus := gardener.ComputeShootStatus(shoot.Status.LastOperation, shoot.Status.LastErrors, shoot.Status.Conditions...)
-		r.shootControlPlane.Status.Ready = shootStatus == gardener.ShootStatusHealthy
-		r.shootControlPlane.Status.Initialized = controlPlaneReady(shoot.Status)
+func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContext) error {
+	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	if cpc.shoot != nil {
+		shootStatus := gardener.ComputeShootStatus(cpc.shoot.Status.LastOperation, cpc.shoot.Status.LastErrors, cpc.shoot.Status.Conditions...)
+		cpc.shootControlPlane.Status.Ready = shootStatus == gardener.ShootStatusHealthy
+		if !cpc.shootControlPlane.Status.Initialized {
+			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
+		}
 	}
-	return r.shootControlPlane.Status.Ready, r.Client.Status().Patch(ctx, r.shootControlPlane, patch)
+	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
 }
 
 func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
