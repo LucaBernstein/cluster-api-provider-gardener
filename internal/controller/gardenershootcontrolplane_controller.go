@@ -144,8 +144,15 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 			if err := r.GardenerClient.Create(cpc.ctx, cpc.shoot); err != nil {
 				return ctrl.Result{}, err
 			}
+			if err := r.syncControlPlaneSpecs(cpc); err != nil {
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{Requeue: true}, nil
 		}
+		return ctrl.Result{}, err
+	}
+
+	if err := r.syncControlPlaneSpecs(cpc); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -162,10 +169,11 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		}
 	}
 
-	// TODO(LucaBernstein): Sync shoot spec back.
-
 	log.Info("Successfully reconciled GardenerShootControlPlane")
 	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
+	if !cpc.shootControlPlane.Status.Ready {
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -257,6 +265,35 @@ func newShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 	}
 }
 
+func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlPlaneContext) error {
+	var (
+		err error
+
+		patchShoot             = client.MergeFrom(cpc.shoot.DeepCopy())
+		patchShootControlPlane = client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	)
+
+	// patch the shoot cluster object from the GardenerShootControlPlane object.
+	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
+	cpc.shoot.Spec = cpc.shootControlPlane.Spec.ShootSpec
+	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
+	if err != nil {
+		cpc.log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Cluster Shoot")
+	}
+
+	// sync back the shoot state (also, if above sync failed).
+	cpc.log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
+	cpc.shootControlPlane.Spec.ShootSpec = cpc.shoot.Spec
+	err1 := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane)
+	if err1 != nil {
+		cpc.log.Error(err, "Error while syncing Gardener Cluster Shoot to GardenerShootControlPlane")
+		if err != nil {
+			return err
+		}
+	}
+	return err1
+}
+
 func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContext) error {
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
 	if cpc.shoot != nil {
@@ -267,6 +304,7 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
 	}
+	cpc.shootControlPlane.Status.LastSyncTimestamp = metav1.Now()
 	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
 }
 
