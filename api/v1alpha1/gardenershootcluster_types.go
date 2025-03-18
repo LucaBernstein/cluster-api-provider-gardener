@@ -24,7 +24,9 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=gscp
+// +kubebuilder:printcolumn:name="Initialized",type=boolean,JSONPath=`.status.initialized`
 // +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
+// +kubebuilder:printcolumn:name="LastSync",type="date",JSONPath=".status.lastSyncTimestamp"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // GardenerShootControlPlane represents a Shoot cluster.
@@ -80,6 +82,9 @@ type GardenerShootControlPlaneStatus struct {
 	// that still have not been created.
 	// +optional
 	UnavailableReplicas int32 `json:"unavailableReplicas"`
+
+	// LastSyncTimestamp is the timestamp of the last control plane status sync.
+	LastSyncTimestamp metav1.Time `json:"lastSyncTimestamp,omitempty"`
 
 	// initialized denotes that the foo control plane  API Server is initialized and thus
 	// it can accept requests.

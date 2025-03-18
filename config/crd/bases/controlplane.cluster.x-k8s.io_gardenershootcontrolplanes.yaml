@@ -17,11 +17,17 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.initialized
+      name: Initialized
+      type: boolean
     - jsonPath: .status.ready
       name: Ready
       type: boolean
     - jsonPath: .metadata.creationTimestamp
       name: Age
+      type: date
+    - jsonPath: .status.lastSyncTimestamp
+      name: LastSync
       type: date
     name: v1alpha1
     schema:
@@ -2469,6 +2475,11 @@ spec:
                   The value of this field is never updated after provisioning is completed. Please use conditions
                   to check the operational state of the control plane.
                 type: boolean
+              lastSyncTimestamp:
+                description: LastSyncTimestamp is the timestamp of the last control
+                  plane status sync.
+                format: date-time
+                type: string
               ready:
                 description: |-
                   ready denotes that the foo control plane is ready to serve requests.

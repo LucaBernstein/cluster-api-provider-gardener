@@ -267,6 +267,7 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
 	}
+	cpc.shootControlPlane.Status.LastSyncTimestamp = metav1.Now()
 	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
 }
 
