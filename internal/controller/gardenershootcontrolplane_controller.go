@@ -162,6 +162,8 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		}
 	}
 
+	// TODO(LucaBernstein): Sync shoot spec back.
+
 	log.Info("Successfully reconciled GardenerShootControlPlane")
 	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
@@ -224,6 +226,8 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 		}
 	}
 
+	// TODO(tobschli): For local development: Check how to fix DNS for access to local cluster.
+
 	viewerKubeconfigRequest := &gardenerauthenticationv1alpha1.ViewerKubeconfigRequest{
 		Spec: gardenerauthenticationv1alpha1.ViewerKubeconfigRequestSpec{
 			ExpirationSeconds: ptr.To(int64(6000)),
@@ -257,6 +261,7 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
 	if cpc.shoot != nil {
 		shootStatus := gardener.ComputeShootStatus(cpc.shoot.Status.LastOperation, cpc.shoot.Status.LastErrors, cpc.shoot.Status.Conditions...)
+		// TODO(LucaBernstein): Adapt readiness check to assert shoot component conditions.
 		cpc.shootControlPlane.Status.Ready = shootStatus == gardener.ShootStatusHealthy
 		if !cpc.shootControlPlane.Status.Initialized {
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
