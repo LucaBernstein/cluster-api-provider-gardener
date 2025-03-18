@@ -12,7 +12,7 @@ spec:
     listKind: GardenerShootControlPlaneList
     plural: gardenershootcontrolplanes
     shortNames:
-    - gsc
+    - gscp
     singular: gardenershootcontrolplane
   scope: Namespaced
   versions:
