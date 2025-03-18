@@ -50,7 +50,11 @@ deepcopy: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: generate
-generate: controller-gen manifests deepcopy fmt lint-fix ## Generate and reformat code.
+generate: controller-gen manifests deepcopy fmt lint-fix format ## Generate and reformat code.
+
+.PHONY: check
+check: generate ## Run generators, formatters and linters and check whether files have been modified.
+	@git diff --quiet || ( echo "Files have been modified. Need to run 'make generate'." && exit 1 )
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -79,6 +83,10 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 		exit 1; \
 	}
 	go test ./test/e2e/ -v -ginkgo.v
+
+.PHONY: format
+format: goimports goimports-reviser ## Format imports.
+	@./hack/format.sh ./api ./cmd ./internal ./test
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -171,12 +179,16 @@ $(LOCALBIN):
 KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+GOIMPORTS ?= $(LOCALBIN)/goimports
+GOIMPORTS_REVISER ?= $(LOCALBIN)/goimports-reviser
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0
 CONTROLLER_TOOLS_VERSION ?= v0.17.2
+GOIMPORTS_VERSION ?= v0.31.0
+GOIMPORTS_REVISER_VERSION ?= v3.9.1
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
@@ -192,6 +204,16 @@ $(KUSTOMIZE): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
+
+.PHONY: goimports
+goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
+$(GOIMPORTS): $(LOCALBIN)
+	$(call go-install-tool,$(GOIMPORTS),golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
+
+.PHONY: goimports-reviser
+goimports-reviser: $(GOIMPORTS_REVISER) ## Download goimports-reviser locally if necessary.
+$(GOIMPORTS_REVISER): $(LOCALBIN)
+	$(call go-install-tool,$(GOIMPORTS_REVISER),github.com/incu6us/goimports-reviser/v3,$(GOIMPORTS_REVISER_VERSION))
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.
