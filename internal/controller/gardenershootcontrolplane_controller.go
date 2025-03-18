@@ -149,6 +149,10 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		return ctrl.Result{}, err
 	}
 
+	if err := r.syncControlPlaneSpec(cpc); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.patchStatus(cpc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -162,10 +166,11 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		}
 	}
 
-	// TODO(LucaBernstein): Sync shoot spec back.
-
 	log.Info("Successfully reconciled GardenerShootControlPlane")
 	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
+	if !cpc.shootControlPlane.Status.Ready {
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -255,6 +260,12 @@ func newShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 		Data: make(map[string][]byte),
 		Type: v1beta1.ClusterSecretType,
 	}
+}
+
+func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpec(cpc ControlPlaneContext) error {
+	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	cpc.shootControlPlane.Spec.ShootSpec = cpc.shoot.Spec
+	return r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch)
 }
 
 func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContext) error {
