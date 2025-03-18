@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,10 +41,6 @@ import (
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
-	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
-	"github.com/gardener/gardener/pkg/utils/gardener"
 )
 
 // GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
