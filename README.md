@@ -33,6 +33,10 @@ make install
 
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
+> **NOTE**: This target assumes that you are running a local Gardener.
+> 
+> For production environments, do not use the `config/overlays/dev` kustomization.
+
 ```sh
 make deploy IMG=localhost:5001/cluster-api-provider-gardener/controller:latest GARDENER_KUBECONFIG=<path/to/gardener/kubeconfig.yaml>
 ```
@@ -43,11 +47,14 @@ privileges or be logged in as admin.
 **Create instances of your solution**
 You can apply the samples (examples) from the config/sample:
 
+> **NOTE**: When using this in a local deployment, this works, but just with the name of `hello-gardener` in the namespace `default`.
+> 
+> This is because of the special setup of Gardener and Cluster-API in the same cluster.
+> For details of this setup, see `config/overlays/dev`.
+
 ```sh
 kubectl apply -k config/samples/
 ```
-
->**NOTE**: Ensure that the samples has default values to test it out.
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
