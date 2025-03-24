@@ -56,10 +56,27 @@ spec:
               Specification of the Shoot cluster.
               If the object's deletion timestamp is set, this field is immutable.
             properties:
+              controlPlaneEndpoint:
+                description: controlPlaneEndpoint represents the endpoint used to
+                  communicate with the control plane.
+                properties:
+                  host:
+                    description: host is the hostname on which the API server is serving.
+                    type: string
+                  port:
+                    description: port is the port on which the API server is serving.
+                    format: int32
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
               project:
+                description: Project is the project in which the Shoot should be placed
+                  in.
                 type: string
               shootSpec:
-                description: ShootSpec is the specification of a Shoot.
+                description: ShootSpec is the specification of the desired Shoot cluster.
                 properties:
                   accessRestrictions:
                     description: AccessRestrictions describe a list of access restrictions

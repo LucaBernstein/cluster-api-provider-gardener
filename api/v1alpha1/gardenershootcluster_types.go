@@ -46,10 +46,26 @@ type GardenerShootControlPlane struct {
 // GardenerShootControlPlaneSpec represents the Spec of the Shoot Cluster,
 // as well as the fields defined by the Cluster API contract.
 type GardenerShootControlPlaneSpec struct {
+	// controlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+	// +optional
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+
+	// Project is the project in which the Shoot should be placed in.
 	// +optional
 	Project string `json:"project,omitempty"`
+
+	// ShootSpec is the specification of the desired Shoot cluster.
 	// + optional
 	ShootSpec gardenercorev1beta1.ShootSpec `json:"shootSpec,omitempty"`
+}
+
+// APIEndpoint represents a reachable Kubernetes API endpoint.
+type APIEndpoint struct {
+	// host is the hostname on which the API server is serving.
+	Host string `json:"host"`
+
+	// port is the port on which the API server is serving.
+	Port int32 `json:"port"`
 }
 
 // GardenerShootControlPlaneStatus defines the observed state of GardenerShootControlPlane.
