@@ -168,6 +168,13 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 			log.Error(err, "Error reconciling Shoot Access for ClusterAPI")
 			return ctrl.Result{}, err
 		}
+
+		log.Info("Reconcile shootControlEndpoint")
+		err = r.reconcileShootControlPlaneEndpoint(cpc)
+		if err != nil {
+			log.Error(err, "Error reconciling shootControlEndpoint")
+			return ctrl.Result{}, err
+		}
 	}
 
 	log.Info("Successfully reconciled GardenerShootControlPlane")
