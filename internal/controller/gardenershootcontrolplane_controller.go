@@ -38,8 +38,12 @@ import (
 	"sigs.k8s.io/cluster-api/util/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
@@ -146,11 +150,13 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		}
 	}
 
-	if err := r.syncControlPlaneSpecs(cpc); err != nil {
+	if err := r.updateStatus(cpc); err != nil {
+		log.Error(err, "failed to update status")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.patchStatus(cpc); err != nil {
+	if err := r.syncControlPlaneSpecs(cpc); err != nil {
+		log.Error(err, "failed to sync control plane spec")
 		return ctrl.Result{}, err
 	}
 
@@ -201,7 +207,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 		log.Info("Shoot not found")
 	}
 
-	if err := r.patchStatus(cpc); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.updateStatus(cpc); err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
 
@@ -327,8 +333,7 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 	return err1
 }
 
-func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContext) error {
-	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneContext) error {
 	if cpc.shoot != nil {
 		shootStatus := gardener.ComputeShootStatus(cpc.shoot.Status.LastOperation, cpc.shoot.Status.LastErrors, cpc.shoot.Status.Conditions...)
 		// TODO(LucaBernstein): Adapt readiness check to assert shoot component conditions.
@@ -338,7 +343,7 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 		}
 		cpc.shootControlPlane.Status.ShootStatus = cpc.shoot.Status
 	}
-	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
+	return r.Client.Status().Update(cpc.ctx, cpc.shootControlPlane)
 }
 
 func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
@@ -354,10 +359,28 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// TODO(tobschli,LucaBernstein): Add additional watch to referenced Shoot clusters in Garden cluster to trigger reconciliations.
+func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster cluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&controlplanev1alpha1.GardenerShootControlPlane{}).
 		Named("gardenershootcontrolplane").
+		WatchesRawSource(
+			source.Kind[client.Object](targetCluster.GetCache(),
+				&gardenercorev1beta1.Shoot{},
+				handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
+			),
+		).
 		Complete(r)
+}
+
+func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx context.Context, obj client.Object) []reconcile.Request {
+	var (
+		log = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))
+
+		controlPlaneList controlplanev1alpha1.GardenerShootControlPlaneList
+	)
+	if err := r.Client.List(ctx, &controlPlaneList, client.MatchingFields{controlplanev1alpha1.ShootReferenceIndexKey: client.ObjectKeyFromObject(obj).String()}); err != nil || len(controlPlaneList.Items) != 1 {
+		log.Error(err, "Could not list control planes")
+		return nil
+	}
+	return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(&controlPlaneList.Items[0])}}
 }

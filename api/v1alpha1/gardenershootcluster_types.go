@@ -22,6 +22,10 @@ import (
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+const (
+	ShootReferenceIndexKey = "shootReference"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=gscp
@@ -69,7 +73,7 @@ type GardenerShootControlPlaneSpec struct {
 type GardenerShootControlPlaneStatus struct {
 	// ShootStatus is the status of the Shoot cluster.
 	// +optional
-	ShootStatus gardenercorev1beta1.ShootStatus
+	ShootStatus gardenercorev1beta1.ShootStatus `json:"shootStatus"`
 
 	// Initialized denotes that the foo control plane  API Server is initialized and thus
 	// it can accept requests.

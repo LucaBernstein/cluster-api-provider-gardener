@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -29,6 +30,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/ptr"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -36,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -209,7 +212,6 @@ func main() {
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
 		Cache: cache.Options{
-			// TODO(LucaBernstein): Rework requeueing, maybe remove again and rather set requeue timeout in controller...
 			SyncPeriod: &syncPeriod,
 		},
 	})
@@ -219,24 +221,40 @@ func main() {
 	}
 
 	// Create client from kubeconfig
-	restConfig, err := clientcmd.BuildConfigFromFlags("", gardenerKubeConfigPath)
+	gardenRestConfig, err := clientcmd.BuildConfigFromFlags("", gardenerKubeConfigPath)
 	if err != nil {
 		setupLog.Error(err, "unable to build Gardener rest config")
 		os.Exit(1)
 	}
 
-	gardenerClient, err := client.New(restConfig, client.Options{
-		Scheme: scheme,
+	gardenMgr, err := manager.New(gardenRestConfig, manager.Options{
+		Logger:                  setupLog,
+		Scheme:                  scheme,
+		GracefulShutdownTimeout: ptr.To(5 * time.Second),
+		Cache: cache.Options{
+			SyncPeriod: &syncPeriod,
+		},
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to build Gardener Kubernetes client")
+		setupLog.Error(err, "unable to build Gardener rest config")
+		os.Exit(1)
+	}
+
+	if err := mgr.Add(gardenMgr); err != nil {
+		setupLog.Error(err, "unable to add Gardener manager to manager", "controller", "GardenerShootControlPlane")
+		os.Exit(1)
+	}
+
+	if err = mgr.Add(&fieldIndexer{mgr: mgr}); err != nil {
+		setupLog.Error(err, "error while initializing field indexer", "controller", "GardenerShootControlPlane")
+		os.Exit(1)
 	}
 
 	if err = (&controller.GardenerShootControlPlaneReconciler{
 		Client:         mgr.GetClient(),
-		GardenerClient: gardenerClient,
+		GardenerClient: gardenMgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
 		os.Exit(1)
 	}
@@ -272,4 +290,25 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+type fieldIndexer struct {
+	mgr ctrl.Manager
+}
+
+func (f *fieldIndexer) Start(ctx context.Context) error {
+	return f.mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&controlplanev1alpha1.GardenerShootControlPlane{},
+		controlplanev1alpha1.ShootReferenceIndexKey,
+		func(obj client.Object) []string {
+			controlPlane, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
+			if !ok {
+				return nil
+			}
+			return []string{client.ObjectKey{
+				Namespace: "garden-" + controlPlane.Spec.Project,
+				Name:      controlPlane.GetName()}.String(),
+			}
+		})
 }
