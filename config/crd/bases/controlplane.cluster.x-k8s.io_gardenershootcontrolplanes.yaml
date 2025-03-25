@@ -23,9 +23,6 @@ spec:
     - jsonPath: .status.ready
       name: Ready
       type: boolean
-    - jsonPath: .status.lastSyncTimestamp
-      name: LastSync
-      type: date
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

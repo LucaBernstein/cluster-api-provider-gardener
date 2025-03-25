@@ -27,7 +27,6 @@ import (
 // +kubebuilder:resource:shortName=gscp
 // +kubebuilder:printcolumn:name="Initialized",type=boolean,JSONPath=`.status.initialized`
 // +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
-// +kubebuilder:printcolumn:name="LastSync",type="date",JSONPath=".status.lastSyncTimestamp"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // GardenerShootControlPlane represents a Shoot cluster.

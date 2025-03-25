@@ -209,6 +209,7 @@ func main() {
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
 		Cache: cache.Options{
+			// TODO(LucaBernstein): Rework requeueing, maybe remove again and rather set requeue timeout in controller...
 			SyncPeriod: &syncPeriod,
 		},
 	})
