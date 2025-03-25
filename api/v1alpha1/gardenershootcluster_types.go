@@ -67,22 +67,20 @@ type GardenerShootControlPlaneSpec struct {
 
 // GardenerShootControlPlaneStatus defines the observed state of GardenerShootControlPlane.
 type GardenerShootControlPlaneStatus struct {
-	// Version represents the current Kubernetes version for the Shoot.
+	// ShootStatus is the status of the Shoot cluster.
 	// +optional
-	Version *string `json:"version,omitempty"`
+	ShootStatus gardenercorev1beta1.ShootStatus
 
-	// LastSyncTimestamp is the timestamp of the last control plane status sync.
-	LastSyncTimestamp metav1.Time `json:"lastSyncTimestamp,omitempty"`
-
-	// initialized denotes that the foo control plane  API Server is initialized and thus
+	// Initialized denotes that the foo control plane  API Server is initialized and thus
 	// it can accept requests.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the control plane.
 	// +optional
+	// +kubebuilder:default=false
 	Initialized bool `json:"initialized"`
 
-	// ready denotes that the foo control plane is ready to serve requests.
+	// Ready denotes that the foo control plane is ready to serve requests.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the control plane.

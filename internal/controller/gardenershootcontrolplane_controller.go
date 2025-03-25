@@ -336,10 +336,8 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 		if !cpc.shootControlPlane.Status.Initialized {
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
-
-		cpc.shootControlPlane.Status.Version = ptr.To(cpc.shoot.Spec.Kubernetes.Version)
+		cpc.shootControlPlane.Status.ShootStatus = cpc.shoot.Status
 	}
-	cpc.shootControlPlane.Status.LastSyncTimestamp = metav1.Now()
 	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
 }
 
