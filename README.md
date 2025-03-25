@@ -1,8 +1,10 @@
 # cluster-api-provider-gardener
-// TODO(user): Add simple overview of use/purpose
+Kubernetes-native declarative infrastructure for Gardener Shoots. 
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+The `cluster-api-provider-gardener` integrates Gardener with Cluster API, enabling the management of Kubernetes clusters
+using Gardener as the control plane provider.
+This provider allows users to leverage the powerful features of Gardener for cluster lifecycle management.
 
 ## Getting Started
 
