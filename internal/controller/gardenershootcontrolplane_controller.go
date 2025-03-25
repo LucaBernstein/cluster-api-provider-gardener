@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/record"
@@ -248,7 +249,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootControlPlaneEndpoint
 	}
 
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
-	cpc.shootControlPlane.Spec.ControlPlaneEndpoint = controlplanev1alpha1.APIEndpoint{
+	cpc.shootControlPlane.Spec.ControlPlaneEndpoint = clusterv1beta1.APIEndpoint{
 		Host: endpoint,
 		Port: 443,
 	}
@@ -306,9 +307,16 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 		patchShootControlPlane = client.MergeFrom(cpc.shootControlPlane.DeepCopy())
 	)
 
+	// TODO(tobschli): We need some special logic here to not brute-push the shoot spec to the cluster.
+	// TODO(tobschli): e.g. we cannot push seedName: nil, when seedName is decided in shoot spec.
 	// patch the shoot cluster object from the GardenerShootControlPlane object.
 	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
 	cpc.shoot.Spec = cpc.shootControlPlane.Spec.ShootSpec
+
+	if kubernetesVersion := cpc.shootControlPlane.Spec.Version; len(kubernetesVersion) > 0 {
+		cpc.shoot.Spec.Kubernetes.Version = kubernetesVersion
+	}
+
 	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
 	if err != nil {
 		cpc.log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Cluster Shoot")
@@ -336,6 +344,8 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 		if !cpc.shootControlPlane.Status.Initialized {
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
+
+		cpc.shootControlPlane.Status.Version = ptr.To(cpc.shoot.Spec.Kubernetes.Version)
 	}
 	cpc.shootControlPlane.Status.LastSyncTimestamp = metav1.Now()
 	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)

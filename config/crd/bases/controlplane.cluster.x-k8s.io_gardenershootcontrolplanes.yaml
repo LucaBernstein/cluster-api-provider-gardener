@@ -57,14 +57,14 @@ spec:
               If the object's deletion timestamp is set, this field is immutable.
             properties:
               controlPlaneEndpoint:
-                description: controlPlaneEndpoint represents the endpoint used to
+                description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
                 properties:
                   host:
-                    description: host is the hostname on which the API server is serving.
+                    description: The hostname on which the API server is serving.
                     type: string
                   port:
-                    description: port is the port on which the API server is serving.
+                    description: The port on which the API server is serving.
                     format: int32
                     type: integer
                 required:
@@ -2479,6 +2479,12 @@ spec:
                 - provider
                 - region
                 type: object
+              version:
+                description: |-
+                  Version defines the desired Kubernetes version for the control plane.
+                  The value must be a valid semantic version; also if the value provided by the user does not start with the v prefix, it
+                  must be added.
+                type: string
             type: object
           status:
             description: GardenerShootControlPlaneStatus defines the observed state

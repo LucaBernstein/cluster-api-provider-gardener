@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // +kubebuilder:object:root=true
@@ -48,7 +49,13 @@ type GardenerShootControlPlane struct {
 type GardenerShootControlPlaneSpec struct {
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint clusterv1beta1.APIEndpoint `json:"controlPlaneEndpoint,omitempty"`
+
+	// Version defines the desired Kubernetes version for the control plane.
+	// The value must be a valid semantic version; also if the value provided by the user does not start with the v prefix, it
+	// must be added.
+	// +optional
+	Version string `json:"version,omitempty"`
 
 	// Project is the project in which the Shoot should be placed in.
 	// +optional
@@ -57,15 +64,6 @@ type GardenerShootControlPlaneSpec struct {
 	// ShootSpec is the specification of the desired Shoot cluster.
 	// + optional
 	ShootSpec gardenercorev1beta1.ShootSpec `json:"shootSpec,omitempty"`
-}
-
-// APIEndpoint represents a reachable Kubernetes API endpoint.
-type APIEndpoint struct {
-	// host is the hostname on which the API server is serving.
-	Host string `json:"host"`
-
-	// port is the port on which the API server is serving.
-	Port int32 `json:"port"`
 }
 
 // GardenerShootControlPlaneStatus defines the observed state of GardenerShootControlPlane.
