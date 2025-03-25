@@ -54,7 +54,20 @@ rules:
 - apiGroups:
   - core.gardener.cloud
   resources:
-  - shoots/viewerkubeconfig
+  - shoots
+  - shoots/status
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.gardener.cloud
+  resources:
+  - shoots/adminkubeconfig
   verbs:
   - create
   - get

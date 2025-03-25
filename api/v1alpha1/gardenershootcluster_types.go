@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // +kubebuilder:object:root=true
@@ -46,42 +47,30 @@ type GardenerShootControlPlane struct {
 // GardenerShootControlPlaneSpec represents the Spec of the Shoot Cluster,
 // as well as the fields defined by the Cluster API contract.
 type GardenerShootControlPlaneSpec struct {
+	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+	// +optional
+	ControlPlaneEndpoint clusterv1beta1.APIEndpoint `json:"controlPlaneEndpoint,omitempty"`
+
+	// Version defines the desired Kubernetes version for the control plane.
+	// The value must be a valid semantic version; also if the value provided by the user does not start with the v prefix, it
+	// must be added.
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// Project is the project in which the Shoot should be placed in.
 	// +optional
 	Project string `json:"project,omitempty"`
+
+	// ShootSpec is the specification of the desired Shoot cluster.
 	// + optional
 	ShootSpec gardenercorev1beta1.ShootSpec `json:"shootSpec,omitempty"`
 }
 
 // GardenerShootControlPlaneStatus defines the observed state of GardenerShootControlPlane.
 type GardenerShootControlPlaneStatus struct {
-	// selector is the label selector in string format to avoid introspection
-	// by clients, and is used to provide the CRD-based integration for the
-	// scale subresource and additional integrations for things like kubectl
-	// describe. The string will be in the same format as the query-param syntax.
-	// More info about label selectors: http://kubernetes.io/docs/user-guide/labels#label-selectors
+	// Version represents the current Kubernetes version for the Shoot.
 	// +optional
-	Selector string `json:"selector,omitempty"`
-
-	// replicas is the total number of machines targeted by this control plane
-	// (their labels match the selector).
-	// +optional
-	Replicas int32 `json:"replicas"`
-
-	// updatedReplicas is the total number of machines targeted by this control plane
-	// that have the desired template spec.
-	// +optional
-	UpdatedReplicas int32 `json:"updatedReplicas"`
-
-	// readyReplicas is the total number of fully running and ready control plane machines.
-	// +optional
-	ReadyReplicas int32 `json:"readyReplicas"`
-
-	// unavailableReplicas is the total number of unavailable machines targeted by this control plane.
-	// This is the total number of machines that are still required for the deployment to have 100% available capacity.
-	// They may either be machines that are running but not yet ready or machines
-	// that still have not been created.
-	// +optional
-	UnavailableReplicas int32 `json:"unavailableReplicas"`
+	Version *string `json:"version,omitempty"`
 
 	// LastSyncTimestamp is the timestamp of the last control plane status sync.
 	LastSyncTimestamp metav1.Time `json:"lastSyncTimestamp,omitempty"`

@@ -56,10 +56,27 @@ spec:
               Specification of the Shoot cluster.
               If the object's deletion timestamp is set, this field is immutable.
             properties:
+              controlPlaneEndpoint:
+                description: ControlPlaneEndpoint represents the endpoint used to
+                  communicate with the control plane.
+                properties:
+                  host:
+                    description: The hostname on which the API server is serving.
+                    type: string
+                  port:
+                    description: The port on which the API server is serving.
+                    format: int32
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
               project:
+                description: Project is the project in which the Shoot should be placed
+                  in.
                 type: string
               shootSpec:
-                description: ShootSpec is the specification of a Shoot.
+                description: ShootSpec is the specification of the desired Shoot cluster.
                 properties:
                   accessRestrictions:
                     description: AccessRestrictions describe a list of access restrictions
@@ -2462,6 +2479,12 @@ spec:
                 - provider
                 - region
                 type: object
+              version:
+                description: |-
+                  Version defines the desired Kubernetes version for the control plane.
+                  The value must be a valid semantic version; also if the value provided by the user does not start with the v prefix, it
+                  must be added.
+                type: string
             type: object
           status:
             description: GardenerShootControlPlaneStatus defines the observed state
@@ -2487,39 +2510,10 @@ spec:
                   The value of this field is never updated after provisioning is completed. Please use conditions
                   to check the operational state of the control plane.
                 type: boolean
-              readyReplicas:
-                description: readyReplicas is the total number of fully running and
-                  ready control plane machines.
-                format: int32
-                type: integer
-              replicas:
-                description: |-
-                  replicas is the total number of machines targeted by this control plane
-                  (their labels match the selector).
-                format: int32
-                type: integer
-              selector:
-                description: |-
-                  selector is the label selector in string format to avoid introspection
-                  by clients, and is used to provide the CRD-based integration for the
-                  scale subresource and additional integrations for things like kubectl
-                  describe. The string will be in the same format as the query-param syntax.
-                  More info about label selectors: http://kubernetes.io/docs/user-guide/labels#label-selectors
+              version:
+                description: Version represents the current Kubernetes version for
+                  the Shoot.
                 type: string
-              unavailableReplicas:
-                description: |-
-                  unavailableReplicas is the total number of unavailable machines targeted by this control plane.
-                  This is the total number of machines that are still required for the deployment to have 100% available capacity.
-                  They may either be machines that are running but not yet ready or machines
-                  that still have not been created.
-                format: int32
-                type: integer
-              updatedReplicas:
-                description: |-
-                  updatedReplicas is the total number of machines targeted by this control plane
-                  that have the desired template spec.
-                format: int32
-                type: integer
             type: object
         type: object
     served: true

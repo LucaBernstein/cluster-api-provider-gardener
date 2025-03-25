@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/record"
@@ -40,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 )
 
 // GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
@@ -55,7 +56,7 @@ type ControlPlaneContext struct {
 	ctx context.Context
 
 	cluster           *v1beta1.Cluster
-	shootControlPlane *infrav1alpha1.GardenerShootControlPlane
+	shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane
 	shoot             *gardenercorev1beta1.Shoot
 }
 
@@ -64,7 +65,8 @@ type ControlPlaneContext struct {
 // +kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.gardener.cloud,resources=shoots/viewerkubeconfig,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=core.gardener.cloud,resources=shoots/adminkubeconfig,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=core.gardener.cloud,resources=shoots;shoots/status,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -84,7 +86,7 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 	}
 
 	log.Info("Getting GardenerShootControlPlane object")
-	cpc.shootControlPlane = &infrav1alpha1.GardenerShootControlPlane{}
+	cpc.shootControlPlane = &controlplanev1alpha1.GardenerShootControlPlane{}
 	if err := r.Client.Get(cpc.ctx, req.NamespacedName, cpc.shootControlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("resource no longer exists")
@@ -167,6 +169,13 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 			log.Error(err, "Error reconciling Shoot Access for ClusterAPI")
 			return ctrl.Result{}, err
 		}
+
+		log.Info("Reconcile shootControlEndpoint")
+		err = r.reconcileShootControlPlaneEndpoint(cpc)
+		if err != nil {
+			log.Error(err, "Error reconciling shootControlEndpoint")
+			return ctrl.Result{}, err
+		}
 	}
 
 	log.Info("Successfully reconciled GardenerShootControlPlane")
@@ -181,9 +190,15 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 	log := cpc.log
 	log.Info("Reconciling Delete GardenerShootControlPlane")
 
-	// TODO(tobschli): Delete Shoot Access secret
+	err := r.Client.Delete(cpc.ctx, newEmptyShootAccessSecret(cpc.cluster))
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+		log.Info("Shoot Access Secret not found")
+	}
 
-	err := r.GardenerClient.Get(cpc.ctx, client.ObjectKeyFromObject(cpc.shoot), cpc.shoot)
+	err = r.GardenerClient.Get(cpc.ctx, client.ObjectKeyFromObject(cpc.shoot), cpc.shoot)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -220,8 +235,29 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 	return ctrl.Result{}, nil
 }
 
+func (r *GardenerShootControlPlaneReconciler) reconcileShootControlPlaneEndpoint(cpc ControlPlaneContext) error {
+	endpoint := ""
+	for _, address := range cpc.shoot.Status.AdvertisedAddresses {
+		if address.Name == constants.AdvertisedAddressExternal {
+			endpoint = address.URL
+			break
+		}
+	}
+
+	if len(endpoint) == 0 {
+		return fmt.Errorf("could not find external advertised address for shoot")
+	}
+
+	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+	cpc.shootControlPlane.Spec.ControlPlaneEndpoint = clusterv1beta1.APIEndpoint{
+		Host: endpoint,
+		Port: 443,
+	}
+	return r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch)
+}
+
 func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPlaneContext) error {
-	secret := newShootAccessSecret(cpc.cluster)
+	secret := newEmptyShootAccessSecret(cpc.cluster)
 	err := r.Client.Get(cpc.ctx, client.ObjectKeyFromObject(secret), secret)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -234,24 +270,22 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 		}
 	}
 
-	// TODO(tobschli): For local development: Check how to fix DNS for access to local cluster.
-
-	viewerKubeconfigRequest := &gardenerauthenticationv1alpha1.ViewerKubeconfigRequest{
-		Spec: gardenerauthenticationv1alpha1.ViewerKubeconfigRequestSpec{
+	adminKubeconfigRequest := &gardenerauthenticationv1alpha1.AdminKubeconfigRequest{
+		Spec: gardenerauthenticationv1alpha1.AdminKubeconfigRequestSpec{
 			ExpirationSeconds: ptr.To(int64(6000)),
 		},
 	}
-	if err := r.Client.SubResource("viewerkubeconfig").Create(cpc.ctx, cpc.shoot, viewerKubeconfigRequest); err != nil {
+	if err := r.Client.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
 		return err
 	}
 
 	secret.Data = make(map[string][]byte)
-	secret.Data["value"] = viewerKubeconfigRequest.Status.Kubeconfig
+	secret.Data["value"] = adminKubeconfigRequest.Status.Kubeconfig
 
 	return r.Client.Update(cpc.ctx, secret)
 }
 
-func newShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
+func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-kubeconfig", cluster.Name),
@@ -273,9 +307,16 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 		patchShootControlPlane = client.MergeFrom(cpc.shootControlPlane.DeepCopy())
 	)
 
+	// TODO(tobschli): We need some special logic here to not brute-push the shoot spec to the cluster.
+	// TODO(tobschli): e.g. we cannot push seedName: nil, when seedName is decided in shoot spec.
 	// patch the shoot cluster object from the GardenerShootControlPlane object.
 	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
 	cpc.shoot.Spec = cpc.shootControlPlane.Spec.ShootSpec
+
+	if kubernetesVersion := cpc.shootControlPlane.Spec.Version; len(kubernetesVersion) > 0 {
+		cpc.shoot.Spec.Kubernetes.Version = kubernetesVersion
+	}
+
 	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
 	if err != nil {
 		cpc.log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Cluster Shoot")
@@ -303,6 +344,8 @@ func (r *GardenerShootControlPlaneReconciler) patchStatus(cpc ControlPlaneContex
 		if !cpc.shootControlPlane.Status.Initialized {
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
+
+		cpc.shootControlPlane.Status.Version = ptr.To(cpc.shoot.Spec.Kubernetes.Version)
 	}
 	cpc.shootControlPlane.Status.LastSyncTimestamp = metav1.Now()
 	return r.Client.Status().Patch(cpc.ctx, cpc.shootControlPlane, patch)
@@ -323,7 +366,7 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 // SetupWithManager sets up the controller with the Manager.
 func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1alpha1.GardenerShootControlPlane{}).
+		For(&controlplanev1alpha1.GardenerShootControlPlane{}).
 		Named("gardenershootcontrolplane").
 		Complete(r)
 }
