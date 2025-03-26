@@ -41,7 +41,30 @@ func SetupGardenerShootControlPlaneWebhookWithManager(mgr ctrl.Manager, gardener
 		WithValidator(&GardenerShootControlPlaneCustomValidator{
 			GardenerClient: gardenerClient,
 		}).
+		WithDefaulter(&GardenerShootControlPlaneCustomDefaulter{}).
 		Complete()
+}
+
+// +kubebuilder:webhook:path=/mutate-controlplane-cluster-x-k8s-io-v1alpha1-gardenershootcontrolplane,mutating=true,failurePolicy=fail,sideEffects=None,groups=controlplane.cluster.x-k8s.io,resources=gardenershootcontrolplanes,verbs=create;update,versions=v1alpha1,name=vgardenershootcontrolplane-v1alpha1.kb.io,admissionReviewVersions=v1
+
+// GardenerShootControlPlaneCustomDefaulter struct is responsible for defaulting the GardenerShootControlPlane resource.
+type GardenerShootControlPlaneCustomDefaulter struct {
+	GardenerClient client.Client
+}
+
+var _ webhook.CustomDefaulter = &GardenerShootControlPlaneCustomDefaulter{}
+
+func (d GardenerShootControlPlaneCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	shootControlPlane, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
+	if !ok {
+		return fmt.Errorf("expected a GardenerShootControlPlane object for the obj but got %T", obj)
+	}
+
+	if len(shootControlPlane.Spec.ProjectNamespace) == 0 {
+		shootControlPlane.Spec.ProjectNamespace = shootControlPlane.Namespace
+	}
+
+	return nil
 }
 
 // NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.

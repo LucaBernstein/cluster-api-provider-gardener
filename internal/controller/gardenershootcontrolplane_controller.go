@@ -349,14 +349,10 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 }
 
 func ShootFromControlPlane(shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane) *gardenercorev1beta1.Shoot {
-	shootNamespace := shootControlPlane.Namespace
-	if len(shootControlPlane.Spec.Project) > 0 {
-		shootNamespace = "garden-" + shootControlPlane.Spec.Project
-	}
 	return &gardenercorev1beta1.Shoot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      shootControlPlane.Name,
-			Namespace: shootNamespace,
+			Namespace: shootControlPlane.Spec.ProjectNamespace,
 		},
 		Spec: shootControlPlane.Spec.ShootSpec,
 	}

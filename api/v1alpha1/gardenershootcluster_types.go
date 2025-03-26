@@ -60,9 +60,11 @@ type GardenerShootControlPlaneSpec struct {
 	// +optional
 	Version string `json:"version,omitempty"`
 
-	// Project is the project in which the Shoot should be placed in.
+	// ProjectNamespace is the namespace in which the Shoot should be placed in.
+	// This has to be a valid project namespace within the Gardener cluster.
+	// If not set, the namespace of this object will be used in the Gardener cluster.
 	// +optional
-	Project string `json:"project,omitempty"`
+	ProjectNamespace string `json:"projectNamespace,omitempty"`
 
 	// ShootSpec is the specification of the desired Shoot cluster.
 	// + optional

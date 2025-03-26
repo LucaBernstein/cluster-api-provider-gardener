@@ -318,7 +318,7 @@ func (f *fieldIndexer) Start(ctx context.Context) error {
 				return nil
 			}
 			return []string{client.ObjectKey{
-				Namespace: "garden-" + controlPlane.Spec.Project,
+				Namespace: controlPlane.Spec.ProjectNamespace,
 				Name:      controlPlane.GetName()}.String(),
 			}
 		})
