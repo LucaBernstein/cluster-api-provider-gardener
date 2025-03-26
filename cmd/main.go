@@ -261,7 +261,8 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookcontrolplanev1alpha1.SetupGardenerShootControlPlaneWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
+		if err = webhookcontrolplanev1alpha1.
+			SetupGardenerShootControlPlaneWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "GardenerShootControlPlane")
 			os.Exit(1)
 		}

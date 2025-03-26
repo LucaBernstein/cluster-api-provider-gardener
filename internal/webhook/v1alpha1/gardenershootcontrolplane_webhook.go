@@ -19,16 +19,16 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
 )
 
 // nolint:unused
