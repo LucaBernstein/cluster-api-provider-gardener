@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= localhost:5001/cluster-api-provider-gardener/controller:latest
+GARDENER_KUBECONFIG ?= ./bin/gardener/example/gardener-local/kind/local/kubeconfig
 GARDENER_DIR ?= $(shell go list -m -f '{{.Dir}}' github.com/gardener/gardener)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -255,6 +256,7 @@ $(CLUSTERCTL): $(LOCALBIN)
 .PHONY: gardener
 gardener: $(GARDENER) $(GARDENER_DIR) ## Copy gardener locally if necessary.
 $(GARDENER): $(LOCALBIN)
+	rm -r $(GARDENER) || true
 	cp -r $(GARDENER_DIR) $(GARDENER)
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist

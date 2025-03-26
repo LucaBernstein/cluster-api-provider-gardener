@@ -1,10 +1,13 @@
 name: E2E Tests
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
+#  push:
+#    branches:
+#      - main
+#  pull_request:
+#    branches:
+#      - main
 
 jobs:
   test-e2e:
@@ -28,8 +31,10 @@ jobs:
       - name: Verify kind installation
         run: kind version
 
-      - name: Create kind cluster
-        run: kind create cluster
+      - name: Create Gardener kind cluster
+        run: |
+          make kind-gardener-up
+          make clusterctl-init
 
       - name: Running Test e2e
         run: |
