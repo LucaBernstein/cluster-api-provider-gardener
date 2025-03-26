@@ -84,7 +84,7 @@ test-e2e: ## Run the e2e tests. Expected an isolated environment using Kind.
 		echo "No Kind cluster is running. Please start a Kind cluster before running the e2e tests."; \
 		exit 1; \
 	}
-	CERT_MANAGER_INSTALL_SKIP=true go test ./test/e2e/ -v -ginkgo.v
+	KUBECONFIG=$(GARDENER_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=true go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: kind-gardener-up
 kind-gardener-up: gardener
@@ -92,7 +92,7 @@ kind-gardener-up: gardener
 
 .PHONY: clusterctl-init
 clusterctl-init: clusterctl
-	$(CLUSTERCTL) init
+	KUBECONFIG=$(GARDENER_KUBECONFIG) $(CLUSTERCTL) init
 
 .PHONY: format
 format: goimports goimports-reviser ## Format imports.
