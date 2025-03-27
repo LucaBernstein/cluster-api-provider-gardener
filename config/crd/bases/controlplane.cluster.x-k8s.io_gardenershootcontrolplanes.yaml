@@ -68,9 +68,11 @@ spec:
                 - host
                 - port
                 type: object
-              project:
-                description: Project is the project in which the Shoot should be placed
-                  in.
+              projectNamespace:
+                description: |-
+                  ProjectNamespace is the namespace in which the Shoot should be placed in.
+                  This has to be a valid project namespace within the Gardener cluster.
+                  If not set, the namespace of this object will be used in the Gardener cluster.
                 type: string
               shootSpec:
                 description: ShootSpec is the specification of the desired Shoot cluster.

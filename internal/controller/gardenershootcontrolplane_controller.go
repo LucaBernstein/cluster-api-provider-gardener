@@ -106,17 +106,7 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	shootNamespace := cpc.shootControlPlane.Namespace
-	if len(cpc.shootControlPlane.Spec.Project) > 0 {
-		shootNamespace = "garden-" + cpc.shootControlPlane.Spec.Project
-	}
-	cpc.shoot = &gardenercorev1beta1.Shoot{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cpc.shootControlPlane.Name,
-			Namespace: shootNamespace,
-		},
-		Spec: cpc.shootControlPlane.Spec.ShootSpec,
-	}
+	cpc.shoot = ShootFromControlPlane(cpc.shootControlPlane)
 
 	// Handle deleted clusters
 	if !cpc.shootControlPlane.DeletionTimestamp.IsZero() {
@@ -356,6 +346,17 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 		}
 	}
 	return false
+}
+
+func ShootFromControlPlane(shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane) *gardenercorev1beta1.Shoot {
+	return &gardenercorev1beta1.Shoot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      shootControlPlane.Name,
+			Namespace: shootControlPlane.Spec.ProjectNamespace,
+		},
+		Spec: shootControlPlane.Spec.ShootSpec,
+	}
+
 }
 
 // SetupWithManager sets up the controller with the Manager.

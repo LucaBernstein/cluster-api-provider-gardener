@@ -16,7 +16,8 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: hello-gardener
 spec:
-  project: local
+  # Defaulted to this objects namespace if not provided.
+  projectNamespace: garden-local
   shootSpec:
       cloudProfile:
         kind: CloudProfile
