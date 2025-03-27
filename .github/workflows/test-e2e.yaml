@@ -31,6 +31,10 @@ jobs:
       - name: Verify kind installation
         run: kind version
 
+      - name: Add hosts to /etc/hosts
+        run: |
+          sudo echo "127.0.0.1 garden.local.gardener.cloud" | sudo tee -a /etc/hosts
+
       - name: Create Gardener kind cluster
         run: |
           go mod tidy
