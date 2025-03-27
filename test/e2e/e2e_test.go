@@ -19,25 +19,24 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	"github.com/gardener/gardener/pkg/utils/test/matchers"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
-	"sigs.k8s.io/cluster-api/api/v1beta1"
-
-	"github.com/gardener/gardener/pkg/client/kubernetes"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/utils/test/matchers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
 	"github.com/gardener/cluster-api-provider-gardener/test/utils"
 )
 
@@ -271,7 +270,8 @@ var _ = Describe("Manager", Ordered, func() {
 			By("create client")
 			clusterClient, err := kubernetes.NewClientFromFile("", os.Getenv("KUBECONFIG"),
 				kubernetes.WithClientOptions(client.Options{Scheme: controlplanev1alpha1.Scheme}),
-				kubernetes.WithClientConnectionOptions(componentbaseconfigv1alpha1.ClientConnectionConfiguration{QPS: 100, Burst: 130}),
+				kubernetes.WithClientConnectionOptions(
+					componentbaseconfigv1alpha1.ClientConnectionConfiguration{QPS: 100, Burst: 130}),
 				kubernetes.WithAllowedUserFields([]string{kubernetes.AuthTokenFile}),
 				kubernetes.WithDisabledCachedClient(),
 			)
