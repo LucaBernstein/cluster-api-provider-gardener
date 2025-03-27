@@ -1,0 +1,90 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+#  push:
+#    branches:
+#      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-e2e:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    env:
+      JOB_NAME: cluster-api-provider-gardener
+      BUILD_ID: dummy
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install the latest version of kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Verify kind installation
+        run: kind version
+
+      - name: Add hosts to /etc/hosts
+        run: |
+          sudo echo "127.0.0.1 garden.local.gardener.cloud" | sudo tee -a /etc/hosts
+
+      - name: Pull Gardener images to cache
+        run: |
+          go mod tidy
+          GARDENER_VERSION=$(go list -m -f '{{.Version}}' github.com/gardener/gardener)
+          TARGET_VERSION=${GARDENER_VERSION}-$(git rev-parse --short HEAD)
+          
+          echo "Pulling images from Gardener registry for local caching ($GARDENER_VERSION -> $TARGET_VERSION)."
+          
+          # IMAGES
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/admission-controller:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/admission-controller:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-admission-controller:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/apiserver:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/apiserver:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-apiserver:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/controller-manager:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/controller-manager:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-controller-manager:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/gardenlet:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/gardenlet:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardenlet:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/node-agent:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/node-agent:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-node-agent:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/operator:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/operator:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-operator:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/resource-manager:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/resource-manager:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-resource-manager:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/scheduler:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/scheduler:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-scheduler:${TARGET_VERSION}
+    
+      - name: Create Gardener kind cluster
+        run: |
+          make kind-gardener-up
+          make clusterctl-init
+
+      - name: Running Test e2e
+        run: |
+          make test-e2e
