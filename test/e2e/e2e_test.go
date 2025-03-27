@@ -19,9 +19,20 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/utils/test/matchers"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/cluster-api/api/v1beta1"
+
+	"github.com/gardener/gardener/pkg/client/kubernetes"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -254,6 +265,91 @@ var _ = Describe("Manager", Ordered, func() {
 			Expect(metricsOutput).To(ContainSubstring(
 				"controller_runtime_reconcile_total",
 			))
+		})
+
+		It("should create a GardenerShootControlPlane with a hibernated Shoot", func(ctx SpecContext) {
+			By("create client")
+			clusterClient, err := kubernetes.NewClientFromFile("", os.Getenv("KUBECONFIG"),
+				kubernetes.WithClientOptions(client.Options{Scheme: controlplanev1alpha1.Scheme}),
+				kubernetes.WithClientConnectionOptions(componentbaseconfigv1alpha1.ClientConnectionConfiguration{QPS: 100, Burst: 130}),
+				kubernetes.WithAllowedUserFields([]string{kubernetes.AuthTokenFile}),
+				kubernetes.WithDisabledCachedClient(),
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			controlPlaneSpec := &controlplanev1alpha1.GardenerShootControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "cp-e2e-",
+					Namespace:    "default",
+					Labels: map[string]string{
+						"app.kubernetes.io/name":       "cluster-api-provider-gardener",
+						"app.kubernetes.io/managed-by": "kustomize",
+					},
+				},
+				Spec: controlplanev1alpha1.GardenerShootControlPlaneSpec{
+					ProjectNamespace: "garden-local",
+					ShootSpec: gardenercorev1beta1.ShootSpec{
+						CloudProfile: &gardenercorev1beta1.CloudProfileReference{Name: "local"},
+						Provider:     gardenercorev1beta1.Provider{Type: "local"},
+						Kubernetes:   gardenercorev1beta1.Kubernetes{Version: "1.32"},
+						Region:       "local",
+						Hibernation:  &gardenercorev1beta1.Hibernation{Enabled: ptr.To(true)},
+					},
+				},
+			}
+
+			By("create control plane")
+			Eventually(func() error {
+				return clusterClient.Client().Create(ctx, controlPlaneSpec)
+			}).Should(Succeed())
+
+			clusterSpec := &v1beta1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: controlPlaneSpec.Name, Namespace: "default"},
+				Spec: v1beta1.ClusterSpec{
+					ControlPlaneRef: &v1.ObjectReference{
+						APIVersion: "controlplane.cluster.x-k8s.io/v1alpha1",
+						Kind:       "GardenerShootControlPlane",
+						Name:       controlPlaneSpec.Name,
+						Namespace:  "default",
+					},
+				},
+			}
+
+			By("create cluster")
+			Expect(clusterClient.Client().Create(ctx, clusterSpec)).To(Succeed())
+
+			shoot := &gardenercorev1beta1.Shoot{
+				ObjectMeta: metav1.ObjectMeta{Name: controlPlaneSpec.Name, Namespace: "garden-local"},
+			}
+
+			By(fmt.Sprintf("Ensure control plane is reconciled and shoot is created (Name: %s)", controlPlaneSpec.Name))
+			Eventually(func(g Gomega) {
+				g.Expect(clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(shoot), shoot)).To(Succeed())
+				g.Expect(shoot.Status.LastOperation).ToNot(BeNil())
+				g.Expect(shoot.Status.LastOperation.Progress).To(BeNumerically(">", 10))
+			}).Should(Succeed())
+
+			By("Ensure control plane spec is updated from shoot")
+			Expect(clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(controlPlaneSpec), controlPlaneSpec)).To(Succeed())
+
+			By("Deleting cluster")
+			Expect(clusterClient.Client().Delete(ctx, clusterSpec)).To(Succeed())
+
+			By("Ensure shoot receives delete request")
+			Eventually(func(g Gomega) {
+				g.Expect(clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(shoot), shoot)).To(Succeed())
+				g.Expect(shoot.DeletionTimestamp).ToNot(BeNil())
+			}).Should(Succeed())
+
+			By("Ensure control plane is deleted")
+			Eventually(func() error {
+				return clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(controlPlaneSpec), controlPlaneSpec)
+			}).WithTimeout(10 * time.Minute).Should(matchers.BeNotFoundError())
+
+			By("Ensure cluster object is deleted")
+			Eventually(func() error {
+				return clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(controlPlaneSpec), controlPlaneSpec)
+			}).Should(matchers.BeNotFoundError())
 		})
 
 		It("should provisioned cert-manager", func() {

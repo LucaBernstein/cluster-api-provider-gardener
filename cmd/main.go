@@ -24,14 +24,9 @@ import (
 	"path/filepath"
 	"time"
 
-	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -49,19 +44,8 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
-	utilruntime.Must(controlplanev1alpha1.AddToScheme(scheme))
-
-	utilruntime.Must(gardenercorev1beta1.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
-}
 
 // nolint:gocyclo
 func main() {
@@ -195,7 +179,7 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
+		Scheme:                 controlplanev1alpha1.Scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
@@ -230,7 +214,7 @@ func main() {
 
 	gardenMgr, err := manager.New(gardenRestConfig, manager.Options{
 		Logger:                  setupLog,
-		Scheme:                  scheme,
+		Scheme:                  controlplanev1alpha1.Scheme,
 		GracefulShutdownTimeout: ptr.To(5 * time.Second),
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
