@@ -67,7 +67,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: generate setup-envtest ## Run tests.
+test: setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
@@ -256,8 +256,7 @@ $(CLUSTERCTL): $(LOCALBIN)
 .PHONY: gardener
 gardener: $(GARDENER) $(GARDENER_DIR) ## Copy gardener locally if necessary.
 $(GARDENER): $(LOCALBIN)
-	rm -r $(GARDENER) || true
-	cp -r $(GARDENER_DIR) $(GARDENER)
+	@[ -d $(GARDENER) ] || cp -r $(GARDENER_DIR) $(GARDENER)
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
