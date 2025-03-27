@@ -326,8 +326,9 @@ var _ = Describe("Manager", Ordered, func() {
 			Eventually(func(g Gomega) {
 				g.Expect(clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(shoot), shoot)).To(Succeed())
 				g.Expect(shoot.Status.LastOperation).ToNot(BeNil())
-				g.Expect(shoot.Status.LastOperation.Progress).To(BeNumerically(">", 10))
-			}).Should(Succeed())
+				g.Expect(shoot.Status.LastOperation.Progress).To(BeEquivalentTo(100))
+				g.Expect(shoot.Status.LastOperation.State).To(Equal(gardenercorev1beta1.LastOperationStateSucceeded))
+			}).WithTimeout(10 * time.Minute).Should(Succeed())
 
 			By("Ensure control plane spec is updated from shoot")
 			Expect(clusterClient.Client().Get(ctx, client.ObjectKeyFromObject(controlPlaneSpec), controlPlaneSpec)).To(Succeed())
