@@ -38,9 +38,50 @@ jobs:
         run: |
           sudo echo "127.0.0.1 garden.local.gardener.cloud" | sudo tee -a /etc/hosts
 
-      - name: Create Gardener kind cluster
+      - name: Pull Gardener images to cache
         run: |
           go mod tidy
+          GARDENER_VERSION=$(go list -m -f '{{.Version}}' github.com/gardener/gardener)
+          TARGET_VERSION=${GARDENER_VERSION}-$(git rev-parse --short HEAD)
+          
+          echo "Pulling images from Gardener registry for local caching ($GARDENER_VERSION -> $TARGET_VERSION)."
+          
+          # IMAGES
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/admission-controller:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/admission-controller:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-admission-controller:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/apiserver:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/apiserver:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-apiserver:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/controller-manager:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/controller-manager:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-controller-manager:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/gardenlet:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/gardenlet:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardenlet:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/node-agent:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/node-agent:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-node-agent:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/operator:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/operator:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-operator:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/resource-manager:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/resource-manager:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-resource-manager:${TARGET_VERSION}
+          
+          docker pull europe-docker.pkg.dev/gardener-project/releases/gardener/scheduler:${GARDENER_VERSION}
+          docker tag europe-docker.pkg.dev/gardener-project/releases/gardener/scheduler:${GARDENER_VERSION} \
+            garden.local.gardener.cloud:5001/local-skaffold_gardener-scheduler:${TARGET_VERSION}
+    
+      - name: Create Gardener kind cluster
+        run: |
           make kind-gardener-up
           make clusterctl-init
 
