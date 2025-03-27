@@ -195,13 +195,14 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 			return ctrl.Result{}, err
 		}
 		log.Info("Shoot not found")
+		cpc.shoot = nil
 	}
 
 	if err = r.updateStatus(cpc); err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
 
-	if !apierrors.IsNotFound(err) {
+	if cpc.shoot != nil {
 		// Propagate the deletion to the shoot.
 		patch := client.MergeFrom(cpc.shoot.DeepCopy())
 		annotations.AddAnnotations(cpc.shoot, map[string]string{constants.ConfirmationDeletion: "true"})
