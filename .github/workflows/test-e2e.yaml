@@ -33,6 +33,7 @@ jobs:
 
       - name: Create Gardener kind cluster
         run: |
+          go mod tidy
           make kind-gardener-up
           make clusterctl-init
 
