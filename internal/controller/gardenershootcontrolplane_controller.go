@@ -340,10 +340,10 @@ func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneConte
 func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 	for _, condition := range shootStatus.Conditions {
 		if condition.Type != gardenercorev1beta1.ShootControlPlaneHealthy {
-			if condition.Status == gardenercorev1beta1.ConditionTrue {
-				return true
-			}
 			continue
+		}
+		if condition.Status == gardenercorev1beta1.ConditionTrue {
+			return true
 		}
 	}
 	return false
