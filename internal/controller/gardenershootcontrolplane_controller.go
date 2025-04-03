@@ -292,24 +292,21 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 	var (
 		err error
 
-		originalShoot          = cpc.shoot.DeepCopy()
-		patchShoot             = client.MergeFrom(originalShoot)
-		patchShootControlPlane = client.MergeFrom(cpc.shootControlPlane.DeepCopy())
+		originalShoot             = cpc.shoot.DeepCopy()
+		patchShoot                = client.MergeFrom(originalShoot.DeepCopy())
+		originalShootControlPlane = cpc.shootControlPlane.DeepCopy()
+		patchShootControlPlane    = client.MergeFrom(originalShootControlPlane.DeepCopy())
 	)
+
+	// Cross-patch Shoot and GardenerShootControlPlane objects.
+	cpc.shoot.Spec = originalShootControlPlane.Spec.ShootSpec
+	cpc.shootControlPlane.Spec.ShootSpec = originalShoot.Spec
 
 	// patch the shoot cluster object from the GardenerShootControlPlane object.
 	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
-	cpc.shoot.Spec = cpc.shootControlPlane.Spec.ShootSpec
-
-	if kubernetesVersion := cpc.shootControlPlane.Spec.Version; len(kubernetesVersion) > 0 {
-		cpc.shoot.Spec.Kubernetes.Version = kubernetesVersion
-	}
-
 	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
-	cpc.shootControlPlane.Spec.ShootSpec = cpc.shoot.Spec
 	if err != nil {
 		cpc.log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Cluster Shoot")
-		cpc.shootControlPlane.Spec.ShootSpec = originalShoot.Spec
 	}
 
 	// sync back the shoot state (also, if above sync failed).

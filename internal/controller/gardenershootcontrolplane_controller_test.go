@@ -65,6 +65,7 @@ var _ = Describe("GardenerShootControlPlane Controller", func() {
 			By("Cleanup the specific resource instance GardenerShootControlPlane")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &GardenerShootControlPlaneReconciler{
