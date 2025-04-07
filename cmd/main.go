@@ -91,6 +91,7 @@ func main() {
 	flag.StringVar(&gardenerKubeConfigPath, "gardener-kubeconfig", "", "Path to the Gardener kube-config")
 	flag.DurationVar(&syncPeriod, "sync-period", time.Minute*10,
 		"The minimum interval at which watched resources are reconciled (e.g. 15m)")
+	ctrl.RegisterFlags(flag.CommandLine)
 	opts := zap.Options{
 		Development: true,
 	}
