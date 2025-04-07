@@ -269,7 +269,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 			ExpirationSeconds: ptr.To(int64(6000)),
 		},
 	}
-	if err := r.Client.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
+	if err := r.GardenerClient.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
 		return err
 	}
 
