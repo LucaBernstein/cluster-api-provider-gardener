@@ -266,9 +266,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = mgr.Add(&fieldIndexer{mgr: mgr}); err != nil {
-		setupLog.Error(err, "error while initializing field indexer", "controller", "GardenerShootControlPlane")
-		os.Exit(1)
+	// Create reconcilers
+	if isKcp {
+		setupLog.Info("Setting up Cluster reconciler, because KCP API Group is present")
+		if err = (&controller.ClusterController{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+			os.Exit(1)
+		}
 	}
 
 	if err = (&controller.GardenerShootControlPlaneReconciler{
