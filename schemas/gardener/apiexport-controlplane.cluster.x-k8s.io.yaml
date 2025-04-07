@@ -1,0 +1,22 @@
+apiVersion: apis.kcp.io/v1alpha1
+kind: APIExport
+metadata:
+  creationTimestamp: null
+  name: controlplane.cluster.x-k8s.io
+spec:
+  latestResourceSchemas:
+  - v250401-cfe2a97.gardenershootcontrolplanes.controlplane.cluster.x-k8s.io
+  - v250401-e39f0c3.clusters.cluster.x-k8s.io
+  permissionClaims:
+    - group: ""
+      resource: "secrets"
+      all: true
+---
+apiVersion: apis.kcp.io/v1alpha1
+kind: APIExportEndpointSlice
+metadata:
+  name: controlplane.cluster.x-k8s.io
+spec:
+  export:
+    path: "root:gardener"
+    name: controlplane.cluster.x-k8s.io
