@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
+	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -22,5 +23,6 @@ func init() {
 
 	utilruntime.Must(gardenercorev1beta1.AddToScheme(Scheme))
 	utilruntime.Must(kubernetes.AddGardenSchemeToScheme(Scheme))
+	utilruntime.Must(apisv1alpha1.AddToScheme(Scheme))
 	// +kubebuilder:scaffold:scheme
 }

@@ -368,7 +368,7 @@ func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager,
 				handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
 			),
 		).
-		Complete(r)
+		Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx context.Context, obj client.Object) []reconcile.Request {
