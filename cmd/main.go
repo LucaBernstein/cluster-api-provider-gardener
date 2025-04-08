@@ -224,12 +224,12 @@ func main() {
 	}
 	restConfig := ctrl.GetConfigOrDie()
 
-	if isKcp, err = kcpAPIsGroupPresent(restConfig); err != nil {
+	if isKcp, err = hasKcpAPIGroups(restConfig); err != nil {
 		setupLog.Error(err, "to determine if kcp API Group is present")
 		os.Exit(1)
 	} else if isKcp {
 		setupLog.Info("Found KCP APIs, looking up virtual workspace URL")
-		exportConfig, err := restConfigForLogicalClusterHostingAPIExport(ctrlOptions.BaseContext(), restConfig, apiExportName)
+		exportConfig, err := restConfigForLogicalClusterHostingAPIExport(mgrContext, restConfig, apiExportName)
 		if err != nil {
 			setupLog.Error(err, "looking up virtual workspace URL")
 			os.Exit(1)
@@ -237,9 +237,10 @@ func main() {
 		mgr, err = kcp.NewClusterAwareManager(exportConfig, ctrlOptions)
 		if err != nil {
 			setupLog.Error(err, "unable to create kcp aware manager")
+			os.Exit(1)
 		}
 	} else {
-		setupLog.Info("Did not find KCP APIs, starting as usual")
+		setupLog.Info("Did not find KCP APIs. Assuming ordinary k8s cluster")
 		mgr, err = ctrl.NewManager(ctrl.GetConfigOrDie(), ctrlOptions)
 		if err != nil {
 			setupLog.Error(err, "unable to start manager")
@@ -365,7 +366,7 @@ func restConfigForLogicalClusterHostingAPIExport(
 	return exportConfig, nil
 }
 
-func kcpAPIsGroupPresent(cfg *rest.Config) (bool, error) {
+func hasKcpAPIGroups(cfg *rest.Config) (bool, error) {
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return false, fmt.Errorf("failed to create discovery client: %w", err)

@@ -1,7 +1,6 @@
 apiVersion: apis.kcp.io/v1alpha1
 kind: APIExport
 metadata:
-  creationTimestamp: null
   name: controlplane.cluster.x-k8s.io
 spec:
   latestResourceSchemas:

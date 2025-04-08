@@ -6,21 +6,30 @@ The `cluster-api-provider-gardener` integrates Gardener with Cluster API, enabli
 using Gardener as the control plane provider.
 This provider allows users to leverage the powerful features of Gardener for cluster lifecycle management.
 
-The controller is also KCP-aware, meaning that it can also be used in as a KCP-controller.
+The controller is also KCP-aware, meaning that it can also be used in KCP as a KCP-controller.
 
 ## Getting Started
 
-### KCP
-#### Prerequisites
+### Common Prerequisites
+
+The following prerequisites apply to all the following deployment-scenarios.
+Please refer to the individual scenario of your choice for the specific prerequisites.
+
 - go version v1.24.0+
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 - a (local) Gardener cluster
+
+### KCP
+
+#### Prerequisites
+
 - a KCP server (`KUBECONFIG` usually is located in `.kcp/admin.kubeconfig`, relative from where KCP is started)
 - KCP's `kubectl` plugins
 
 #### To Deploy on the cluster
+
 **Create controller workspace:**
 > **NOTE**: For our quick-start, we use `:root:gardener` as our controller-workspace.
 ```shell
@@ -51,17 +60,13 @@ kubectl apply -f schemas/binding.yaml
 ```shell
 kubectl apply -f config/samples/controlplane_v1alpha1_gardenershootcontrolplane.yaml
 ```
+
 ### Cluster-API
 
-#### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
-- a (local) Gardener cluster
-
 The local-setup assumes, that you deploy Cluster-API next to the virtual Garden-Cluster, which is _not_ intended for production.
+
 #### To Deploy on the cluster
+
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
@@ -104,6 +109,7 @@ kubectl apply -k config/samples/
 ```
 
 #### To Uninstall
+
 **Delete the instances (CRs) from the cluster:**
 
 ```sh
