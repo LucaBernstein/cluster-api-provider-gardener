@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -53,6 +54,7 @@ type GardenerShootControlPlaneReconciler struct {
 	Client         client.Client
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
+	IsKCP          bool
 }
 
 type ControlPlaneContext struct {
@@ -78,7 +80,7 @@ type ControlPlaneContext struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.2/pkg/reconcile
 func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcontrolplane", req.NamespacedName)
+	log := runtimelog.FromContext(ctx).WithValues("gardenershootcontrolplane", req.NamespacedName, "cluster", req.ClusterName)
 
 	cpc := ControlPlaneContext{
 		log: log,
@@ -107,6 +109,7 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 	}
 
 	cpc.shoot = ShootFromControlPlane(cpc.shootControlPlane)
+	injectReferenceLabels(cpc.shoot, cpc.shootControlPlane, r.IsKCP, req.ClusterName)
 
 	// Handle deleted clusters
 	if !cpc.shootControlPlane.DeletionTimestamp.IsZero() {
@@ -266,7 +269,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 			ExpirationSeconds: ptr.To(int64(6000)),
 		},
 	}
-	if err := r.Client.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
+	if err := r.GardenerClient.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
 		return err
 	}
 
@@ -346,6 +349,24 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 	return false
 }
 
+func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane, isKCP bool, kcpClusterName string) {
+	labels := map[string]string{
+		controlplanev1alpha1.GSCPReferenceNameKey:      shootControlPlane.Name,
+		controlplanev1alpha1.GSCPReferenceNamespaceKey: shootControlPlane.Namespace,
+	}
+	if isKCP {
+		labels[controlplanev1alpha1.GSCPReferecenceClusterNameKey] = kcpClusterName
+	}
+
+	if shoot.Labels == nil {
+		shoot.Labels = labels
+	} else {
+		for k, v := range labels {
+			shoot.Labels[k] = v
+		}
+	}
+}
+
 func ShootFromControlPlane(shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane) *gardenercorev1beta1.Shoot {
 	return &gardenercorev1beta1.Shoot{
 		ObjectMeta: metav1.ObjectMeta{
@@ -368,18 +389,43 @@ func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager,
 				handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
 			),
 		).
-		Complete(r)
+		Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx context.Context, obj client.Object) []reconcile.Request {
 	var (
-		log = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))
-
-		controlPlaneList controlplanev1alpha1.GardenerShootControlPlaneList
+		log          = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))
+		clusterName  string
+		controlPlane *controlplanev1alpha1.GardenerShootControlPlane
 	)
-	if err := r.Client.List(ctx, &controlPlaneList, client.MatchingFields{controlplanev1alpha1.ShootReferenceIndexKey: client.ObjectKeyFromObject(obj).String()}); err != nil || len(controlPlaneList.Items) != 1 {
-		log.Error(err, "Could not list control planes")
+	shoot, ok := obj.(*gardenercorev1beta1.Shoot)
+	if !ok {
+		log.Error(fmt.Errorf("could not assert object to Shoot"), "")
 		return nil
 	}
-	return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(&controlPlaneList.Items[0])}}
+
+	namespace, ok := shoot.GetLabels()[controlplanev1alpha1.GSCPReferenceNamespaceKey]
+	if !ok {
+		log.Info("Could not find gscp namespace on label")
+		return nil
+	}
+
+	name, ok := shoot.GetLabels()[controlplanev1alpha1.GSCPReferenceNameKey]
+	if !ok {
+		log.Info("Could not find gscp name on label")
+	}
+	if r.IsKCP {
+		clusterName, ok = shoot.GetLabels()[controlplanev1alpha1.GSCPReferecenceClusterNameKey]
+		if !ok {
+			log.Info("Could not find gscp cluster on label")
+		}
+	}
+
+	controlPlane = &controlplanev1alpha1.GardenerShootControlPlane{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(controlPlane), ClusterName: clusterName}}
 }

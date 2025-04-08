@@ -23,7 +23,9 @@ import (
 )
 
 const (
-	ShootReferenceIndexKey = "shootReference"
+	GSCPReferenceNamespaceKey     = "controlplane.cluster.x-k8s.io/gscp_namespace"
+	GSCPReferenceNameKey          = "controlplane.cluster.x-k8s.io/gscp_name"
+	GSCPReferecenceClusterNameKey = "controlplane.cluster.x-k8s.io/gscp_cluster"
 )
 
 // +kubebuilder:object:root=true

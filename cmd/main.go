@@ -20,11 +20,16 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -45,6 +51,10 @@ import (
 
 var (
 	setupLog = ctrl.Log.WithName("setup")
+)
+
+const (
+	apiExportName = "controlplane.cluster.x-k8s.io"
 )
 
 // nolint:gocyclo
@@ -81,6 +91,7 @@ func main() {
 	flag.StringVar(&gardenerKubeConfigPath, "gardener-kubeconfig", "", "Path to the Gardener kube-config")
 	flag.DurationVar(&syncPeriod, "sync-period", time.Minute*10,
 		"The minimum interval at which watched resources are reconciled (e.g. 15m)")
+	ctrl.RegisterFlags(flag.CommandLine)
 	opts := zap.Options{
 		Development: true,
 	}
@@ -88,6 +99,8 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	mgrContext := ctrl.SetupSignalHandler()
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -178,13 +191,22 @@ func main() {
 		})
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	var (
+		mgr   ctrl.Manager
+		err   error
+		isKcp bool
+	)
+
+	ctrlOptions := ctrl.Options{
 		Scheme:                 controlplanev1alpha1.Scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7ceb2ea3.cluster.x-k8s.io",
+		BaseContext: func() context.Context {
+			return mgrContext
+		},
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -199,10 +221,31 @@ func main() {
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
 		},
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+	}
+	restConfig := ctrl.GetConfigOrDie()
+
+	if isKcp, err = hasKcpAPIGroups(restConfig); err != nil {
+		setupLog.Error(err, "to determine if kcp API Group is present")
 		os.Exit(1)
+	} else if isKcp {
+		setupLog.Info("Found KCP APIs, looking up virtual workspace URL")
+		exportConfig, err := restConfigForLogicalClusterHostingAPIExport(mgrContext, restConfig, apiExportName)
+		if err != nil {
+			setupLog.Error(err, "looking up virtual workspace URL")
+			os.Exit(1)
+		}
+		mgr, err = kcp.NewClusterAwareManager(exportConfig, ctrlOptions)
+		if err != nil {
+			setupLog.Error(err, "unable to create kcp aware manager")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("Did not find KCP APIs. Assuming ordinary k8s cluster")
+		mgr, err = ctrl.NewManager(ctrl.GetConfigOrDie(), ctrlOptions)
+		if err != nil {
+			setupLog.Error(err, "unable to start manager")
+			os.Exit(1)
+		}
 	}
 
 	// Create client from kubeconfig
@@ -219,26 +262,37 @@ func main() {
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
 		},
+		BaseContext: func() context.Context {
+			return mgrContext
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to build Gardener rest config")
 		os.Exit(1)
 	}
 
-	if err := mgr.Add(gardenMgr); err != nil {
+	if err = mgr.Add(gardenMgr); err != nil {
 		setupLog.Error(err, "unable to add Gardener manager to manager", "controller", "GardenerShootControlPlane")
 		os.Exit(1)
 	}
 
-	if err = mgr.Add(&fieldIndexer{mgr: mgr}); err != nil {
-		setupLog.Error(err, "error while initializing field indexer", "controller", "GardenerShootControlPlane")
-		os.Exit(1)
+	// Create reconcilers
+	if isKcp {
+		setupLog.Info("Setting up Cluster reconciler, because KCP API Group is present")
+		if err = (&controller.ClusterController{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+			os.Exit(1)
+		}
 	}
 
 	if err = (&controller.GardenerShootControlPlaneReconciler{
 		Client:         mgr.GetClient(),
 		GardenerClient: gardenMgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
+		IsKCP:          isKcp,
 	}).SetupWithManager(mgr, gardenMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
 		os.Exit(1)
@@ -281,29 +335,58 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(mgrContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-type fieldIndexer struct {
-	mgr ctrl.Manager
+// restConfigForLogicalClusterHostingAPIExport returns a *rest.Config properly configured
+// to communicate with the endpoint for the APIExport's virtual workspace.
+func restConfigForLogicalClusterHostingAPIExport(
+	ctx context.Context, cfg *rest.Config, apiExportName string) (*rest.Config, error) {
+	apiExportClient, err := client.New(cfg, client.Options{
+		Scheme: controlplanev1alpha1.Scheme,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating APIExport client: %w", err)
+	}
+
+	apiExport := &apisv1alpha1.APIExport{}
+	if err := apiExportClient.Get(ctx, types.NamespacedName{Name: apiExportName}, apiExport); err != nil {
+		return nil, fmt.Errorf("error getting APIExport %q: %w", apiExportName, err)
+	}
+	// This field is deprecated, but the alternative is not feasible for us.
+	// We do not use Partitions. Without partitions, the controller does not populate the endpoints.
+	if len(apiExport.Status.VirtualWorkspaces) < 1 { // nolint:staticcheck
+		return nil, fmt.Errorf("APIExport %q status.virtualWorkspaces is empty", apiExportName)
+	}
+
+	// create a new rest.Config with the APIExport's virtual workspace URL
+	exportConfig := rest.CopyConfig(cfg)
+	exportConfig.Host = apiExport.Status.VirtualWorkspaces[0].URL // nolint:staticcheck
+
+	return exportConfig, nil
 }
 
-func (f *fieldIndexer) Start(ctx context.Context) error {
-	return f.mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&controlplanev1alpha1.GardenerShootControlPlane{},
-		controlplanev1alpha1.ShootReferenceIndexKey,
-		func(obj client.Object) []string {
-			controlPlane, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
-			if !ok {
-				return nil
+func hasKcpAPIGroups(cfg *rest.Config) (bool, error) {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return false, fmt.Errorf("failed to create discovery client: %w", err)
+	}
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		return false, fmt.Errorf("failed to get server groups: %w", err)
+	}
+
+	for _, group := range apiGroupList.Groups {
+		if group.Name == apisv1alpha1.SchemeGroupVersion.Group {
+			for _, version := range group.Versions {
+				if version.Version == apisv1alpha1.SchemeGroupVersion.Version {
+					return true, nil
+				}
 			}
-			return []string{client.ObjectKey{
-				Namespace: controlPlane.Spec.ProjectNamespace,
-				Name:      controlPlane.GetName()}.String(),
-			}
-		})
+		}
+	}
+	return false, nil
 }
