@@ -262,6 +262,9 @@ func main() {
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
 		},
+		BaseContext: func() context.Context {
+			return mgrContext
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to build Gardener rest config")
