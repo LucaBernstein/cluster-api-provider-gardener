@@ -100,6 +100,8 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	mgrContext := ctrl.SetupSignalHandler()
+
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
 	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
@@ -202,6 +204,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7ceb2ea3.cluster.x-k8s.io",
+		BaseContext: func() context.Context {
+			return mgrContext
+		},
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -224,7 +229,7 @@ func main() {
 		os.Exit(1)
 	} else if isKcp {
 		setupLog.Info("Found KCP APIs, looking up virtual workspace URL")
-		exportConfig, err := restConfigForLogicalClusterHostingAPIExport(context.Background(), restConfig, apiExportName)
+		exportConfig, err := restConfigForLogicalClusterHostingAPIExport(ctrlOptions.BaseContext(), restConfig, apiExportName)
 		if err != nil {
 			setupLog.Error(err, "looking up virtual workspace URL")
 			os.Exit(1)
@@ -326,7 +331,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(mgrContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
