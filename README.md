@@ -33,7 +33,7 @@ Please refer to the individual scenario of your choice for the specific prerequi
 **Create controller workspace:**
 > **NOTE**: For our quick-start, we use `:root:gardener` as our controller-workspace.
 ```shell
-kubectl create-workspace gardener --enter
+kubectl create workspace gardener --enter
 ```
 
 **Create `APIResourceSchema`s, `APIExport` and `APIBinding` in Controller-workspace:**
@@ -48,7 +48,7 @@ kubectl apply -f schemas/binding.yaml
 
 **Create and enter consuming workspace:**
 ```shell
-kubectl create-workspace test --enter
+kubectl create workspace test --enter
 ```
 
 **Create `APIBinding` for consuming workspace:**
