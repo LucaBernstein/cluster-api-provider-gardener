@@ -46,6 +46,12 @@ kubectl apply -f schemas/gardener
 kubectl apply -f schemas/binding.yaml
 ```
 
+**Run controller:**
+```shell
+go run cmd/main.go --kubeconfig <path/to/kcp-kubeconfig> --gardener-kubeconfig  <path/to/gardener/kubeconfig.yaml>
+
+```
+
 **Create and enter consuming workspace:**
 ```shell
 kubectl create workspace test --enter
