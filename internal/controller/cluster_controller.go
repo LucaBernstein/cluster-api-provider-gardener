@@ -55,17 +55,18 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	if gscp.Status.Initialized {
-		cluster.Status = v1beta1.ClusterStatus{
-			Phase:               string(v1beta1.ClusterPhaseProvisioned),
-			InfrastructureReady: true,
-			ControlPlaneReady:   true,
-			ObservedGeneration:  cluster.Generation,
-		}
-		if err := r.Client.Status().Update(ctx, &cluster); err != nil {
-			log.Error(err, "unable to update cluster status")
-			return ctrl.Result{}, err
-		}
+	cluster.Status = v1beta1.ClusterStatus{
+		Phase:               string(v1beta1.ClusterPhaseProvisioned),
+		InfrastructureReady: true,
+		ControlPlaneReady:   true,
+		ObservedGeneration:  cluster.Generation,
+	}
+	if !gscp.Status.Initialized {
+		cluster.Status.Phase = string(v1beta1.ClusterPhaseProvisioning)
+	}
+	if err := r.Client.Status().Update(ctx, &cluster); err != nil {
+		log.Error(err, "unable to update cluster status")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
