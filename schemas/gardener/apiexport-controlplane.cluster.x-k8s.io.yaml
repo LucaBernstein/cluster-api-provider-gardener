@@ -10,12 +10,3 @@ spec:
     - group: ""
       resource: "secrets"
       all: true
----
-apiVersion: apis.kcp.io/v1alpha1
-kind: APIExportEndpointSlice
-metadata:
-  name: controlplane.cluster.x-k8s.io
-spec:
-  export:
-    path: "root:gardener"
-    name: controlplane.cluster.x-k8s.io
