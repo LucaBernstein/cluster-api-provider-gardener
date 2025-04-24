@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"time"
 
+	controller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
+
 	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -44,9 +46,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
-	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	controllercluster "github.com/gardener/cluster-api-provider-gardener/internal/controller/cluster"
+	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/controlplane/v1alpha1"
 )
 
 var (
@@ -279,7 +281,7 @@ func main() {
 	// Create reconcilers
 	if isKcp {
 		setupLog.Info("Setting up Cluster reconciler, because KCP API Group is present")
-		if err = (&controller.ClusterController{
+		if err = (&controllercluster.ClusterController{
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {

@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
+	"github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 )
 
 // ClusterController mocks the cluster-api Cluster controller.

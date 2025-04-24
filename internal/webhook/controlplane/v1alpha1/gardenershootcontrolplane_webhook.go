@@ -27,8 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	"github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
 )
 
 // nolint:unused
