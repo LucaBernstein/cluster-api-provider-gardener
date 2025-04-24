@@ -7,9 +7,7 @@ replace sigs.k8s.io/controller-runtime => github.com/kcp-dev/controller-runtime 
 require (
 	github.com/gardener/gardener v1.114.0
 	github.com/go-logr/logr v1.4.2
-	github.com/kcp-dev/apimachinery/v2 v2.0.1-0.20250223115924-431177b024f3
 	github.com/kcp-dev/kcp/sdk v0.27.1
-	github.com/kcp-dev/logicalcluster/v3 v3.0.5
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	k8s.io/api v0.32.3
@@ -72,8 +70,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kcp-dev/apimachinery v0.0.0-20221102195355-d65878bc16be // indirect
-	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1 // indirect
+	github.com/kcp-dev/apimachinery/v2 v2.0.1-0.20250223115924-431177b024f3 // indirect
+	github.com/kcp-dev/logicalcluster/v3 v3.0.5 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect

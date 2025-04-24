@@ -25,8 +25,6 @@ import (
 	"path/filepath"
 	"time"
 
-	controller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
-
 	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -48,6 +46,7 @@ import (
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	controllercluster "github.com/gardener/cluster-api-provider-gardener/internal/controller/cluster"
+	controller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
 	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/controlplane/v1alpha1"
 )
 
