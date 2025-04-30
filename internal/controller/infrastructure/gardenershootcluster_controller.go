@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gardener/gardener/pkg/apis/core"
+	"github.com/gardener/gardener/pkg/apis/core/helper"
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,40 +106,109 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context, infraClu
 		return ctrl.Result{}, err
 	}
 
-	if !infraCluster.Status.Ready {
-		infraCluster.Status.Ready = true
-		if err := r.Client.Status().Patch(ctx, infraCluster, patch); err != nil {
-			log.Error(err, "Failed to patch GardenerShootCluster status")
-			return ctrl.Result{}, err
-		}
+	if err := r.updateStatus(ctx, infraCluster, cluster); err != nil {
+		log.Error(err, "Failed to update GardenerShootCluster status")
+		return ctrl.Result{}, err
 	}
 	log.Info("GardenerShootCluster reconciled successfully")
 	return ctrl.Result{}, nil
 }
 
-func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) error {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "syncSpecs")
+func (r *GardenerShootClusterReconciler) updateStatus(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) error {
+	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "updateStatus")
+
+	shoot, err := r.shootFromCluster(ctx, infraCluster, cluster)
+	if err != nil {
+		log.Error(err, "Failed to get Shoot from Cluster")
+		return err
+	}
+	if shoot == nil {
+		log.Info("Shoot not found, do nothing")
+		return nil
+	}
+
+	if shoot.Spec.SeedName == nil {
+		log.Info("Shoot does not have a SeedName yet, do nothing")
+		return nil
+	}
+
+	seed := &gardenercorev1beta1.Seed{}
+	if err := r.GardenerClient.Get(ctx, types.NamespacedName{Name: *shoot.Spec.SeedName}, seed); err != nil {
+		log.Error(err, "Failed to get Seed")
+		return err
+	}
+
+	coreSeed := core.Seed{}
+	if err := gardenercorev1beta1.Convert_v1beta1_Seed_To_core_Seed(seed, &coreSeed, nil); err != nil {
+		log.Error(err, "Failed to convert Seed from v1beta1 to core")
+		return err
+	}
+
+	patch := client.MergeFrom(infraCluster.DeepCopy())
+
+	gardenletReadyCondition := helper.GetCondition(coreSeed.Status.Conditions, core.SeedGardenletReady)
+	backupBucketCondition := helper.GetCondition(coreSeed.Status.Conditions, core.SeedBackupBucketsReady)
+	extensionsReadyCondition := helper.GetCondition(coreSeed.Status.Conditions, core.SeedExtensionsReady)
+	seedSystemComponentsHealthyCondition := helper.GetCondition(coreSeed.Status.Conditions, core.SeedSystemComponentsHealthy)
+
+	if gardenletReadyCondition != nil && gardenletReadyCondition.Status == core.ConditionUnknown ||
+		(gardenletReadyCondition == nil || gardenletReadyCondition.Status != core.ConditionTrue) ||
+		(backupBucketCondition != nil && backupBucketCondition.Status != core.ConditionTrue) ||
+		(extensionsReadyCondition == nil || extensionsReadyCondition.Status == core.ConditionFalse || extensionsReadyCondition.Status == core.ConditionUnknown) ||
+		(seedSystemComponentsHealthyCondition != nil && (seedSystemComponentsHealthyCondition.Status == core.ConditionFalse || seedSystemComponentsHealthyCondition.Status == core.ConditionUnknown)) {
+		infraCluster.Status.Ready = false
+	} else {
+		infraCluster.Status.Ready = true
+	}
+
+	if err := r.Client.Status().Patch(ctx, infraCluster, patch); err != nil {
+		log.Error(err, "Failed to patch GardenerShootCluster status")
+		return err
+	}
+
+	log.Info("GardenerShootCluster status updated successfully")
+	return nil
+}
+
+func (r *GardenerShootClusterReconciler) shootFromCluster(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) (*gardenercorev1beta1.Shoot, error) {
+	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "shootFromCluster")
 
 	if cluster.Spec.ControlPlaneRef == nil {
 		log.Info("ControlPlaneRef is nil, do nothing")
-		return nil
+		return nil, nil
 	}
 	controlPlane := &controlplanev1alpha1.GardenerShootControlPlane{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Spec.ControlPlaneRef.Namespace, Name: cluster.Spec.ControlPlaneRef.Name}, controlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("ControlPlane not found")
-			return nil
+			return nil, nil
 		}
 		log.Error(err, "Failed to get ControlPlane")
-		return err
+		return nil, err
 	}
 
 	shoot := &gardenercorev1beta1.Shoot{}
 	if err := r.GardenerClient.Get(ctx, providerutil.ShootNameFromCAPIResources(*cluster, *controlPlane), shoot); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil
+			return nil, nil
 		}
+		return nil, err
+	}
+
+	return shoot, nil
+}
+
+func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) error {
+	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "syncSpecs")
+
+	shoot, err := r.shootFromCluster(ctx, infraCluster, cluster)
+	if err != nil {
+		log.Error(err, "Failed to get Shoot from Cluster")
 		return err
+	}
+	if shoot == nil {
+		log.Info("Shoot not found, do nothing")
+		return nil
 	}
 
 	var (
