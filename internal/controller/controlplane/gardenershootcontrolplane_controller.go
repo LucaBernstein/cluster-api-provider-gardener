@@ -19,13 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/utils/gardener"
-	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +47,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
+	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"
 )
 
 // GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
@@ -83,8 +85,8 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 	log := runtimelog.FromContext(ctx).WithValues("gardenershootcontrolplane", req.NamespacedName, "cluster", req.ClusterName)
 
 	cpc := ControlPlaneContext{
-		log: log,
-		ctx: ctx,
+		ctx:         ctx,
+		clusterName: req.ClusterName,
 	}
 
 	log.Info("Getting GardenerShootControlPlane object")
@@ -313,14 +315,14 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 		err error
 
 		originalShoot             = cpc.shoot.DeepCopy()
-		patchShoot                = client.MergeFrom(originalShoot.DeepCopy())
+		patchShoot                = client.StrategicMergeFrom(originalShoot.DeepCopy())
 		originalShootControlPlane = cpc.shootControlPlane.DeepCopy()
 		patchShootControlPlane    = client.MergeFrom(originalShootControlPlane.DeepCopy())
 	)
 
 	// Cross-patch Shoot and GardenerShootControlPlane objects.
-	cpc.shoot.Spec = originalShootControlPlane.Spec.ShootSpec
-	cpc.shootControlPlane.Spec.ShootSpec = originalShoot.Spec
+	providerutil.SyncShootSpecFromGSCP(cpc.shoot, originalShootControlPlane)
+	providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
 
 	// patch the shoot cluster object from the GardenerShootControlPlane object.
 	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
