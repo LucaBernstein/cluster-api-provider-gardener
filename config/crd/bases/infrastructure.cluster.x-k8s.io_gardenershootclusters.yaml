@@ -14,7 +14,14 @@ spec:
     singular: gardenershootcluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GardenerShootCluster is the Schema for the gardenershootclusters
@@ -61,7 +68,7 @@ spec:
             properties:
               ready:
                 description: |-
-                  Ready denotes that the foo cluster infrastructure is fully provisioned.
+                  Ready denotes that the Seed where the Shoot is hosted is ready.
                   NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
                   The value of this field is never updated after provisioning is completed. Please use conditions
                   to check the operational state of the infa cluster.
