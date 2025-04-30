@@ -44,9 +44,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api"
 	controllercluster "github.com/gardener/cluster-api-provider-gardener/internal/controller/cluster"
-	controller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
+	controlplanecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
+	infrastructurecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/infrastructure"
 	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/controlplane/v1alpha1"
 )
 
@@ -289,13 +290,23 @@ func main() {
 		}
 	}
 
-	if err = (&controller.GardenerShootControlPlaneReconciler{
+	if err = (&controlplanecontroller.GardenerShootControlPlaneReconciler{
 		Client:         mgr.GetClient(),
 		GardenerClient: gardenMgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		IsKCP:          isKcp,
 	}).SetupWithManager(mgr, gardenMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
+		os.Exit(1)
+	}
+
+	if err = (&infrastructurecontroller.GardenerShootClusterReconciler{
+		Client:         mgr.GetClient(),
+		GardenerClient: gardenMgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		IsKCP:          isKcp,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster")
 		os.Exit(1)
 	}
 	// nolint:goconst
