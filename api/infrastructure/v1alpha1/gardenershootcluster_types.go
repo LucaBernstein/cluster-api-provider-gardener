@@ -17,7 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	GSCReferenceNamespaceKey     = "infrastructure.cluster.x-k8s.io/gsc_namespace"
+	GSCReferenceNameKey          = "infrastructure.cluster.x-k8s.io/gsc_name"
+	GSCReferecenceClusterNameKey = "controlplane.cluster.x-k8s.io/gsc_cluster"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -25,17 +32,19 @@ import (
 
 // GardenerShootClusterSpec defines the desired state of GardenerShootCluster.
 type GardenerShootClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of GardenerShootCluster. Edit gardenershootcluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// CloudProfile contains a reference to a CloudProfile or a NamespacedCloudProfile.
+	// +optional
+	CloudProfile *v1beta1.CloudProfileReference `json:"cloudProfile,omitempty"`
 }
 
 // GardenerShootClusterStatus defines the observed state of GardenerShootCluster.
 type GardenerShootClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Ready denotes that the foo cluster infrastructure is fully provisioned.
+	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
+	// The value of this field is never updated after provisioning is completed. Please use conditions
+	// to check the operational state of the infa cluster.
+	// +optional
+	Ready bool `json:"ready"`
 }
 
 // +kubebuilder:object:root=true
