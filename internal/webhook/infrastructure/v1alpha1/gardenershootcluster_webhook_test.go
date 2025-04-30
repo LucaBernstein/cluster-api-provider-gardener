@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
-	// TODO (user): Add any additional imports if needed
 )
 
 var _ = Describe("GardenerShootCluster Webhook", func() {

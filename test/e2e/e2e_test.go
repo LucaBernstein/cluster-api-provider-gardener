@@ -19,7 +19,6 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +38,7 @@ import (
 
 	"github.com/gardener/cluster-api-provider-gardener/api"
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	"github.com/gardener/cluster-api-provider-gardener/test/utils"
 )
 

@@ -322,7 +322,8 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookinfrastructurev1alpha1.SetupGardenerShootClusterWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
+		if err = webhookinfrastructurev1alpha1.
+			SetupGardenerShootClusterWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "GardenerShootCluster")
 			os.Exit(1)
 		}
