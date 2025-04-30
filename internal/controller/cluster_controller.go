@@ -58,7 +58,7 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	cluster.Status = v1beta1.ClusterStatus{
 		Phase:               string(v1beta1.ClusterPhaseProvisioned),
 		InfrastructureReady: true,
-		ControlPlaneReady:   true,
+		ControlPlaneReady:   gscp.Status.Initialized,
 		ObservedGeneration:  cluster.Generation,
 	}
 	if !gscp.Status.Initialized {
