@@ -40,14 +40,32 @@ spec:
           spec:
             description: GardenerShootClusterSpec defines the desired state of GardenerShootCluster.
             properties:
-              foo:
-                description: Foo is an example field of GardenerShootCluster. Edit
-                  gardenershootcluster_types.go to remove/update
-                type: string
+              cloudProfile:
+                description: CloudProfile contains a reference to a CloudProfile or
+                  a NamespacedCloudProfile.
+                properties:
+                  kind:
+                    description: Kind contains a CloudProfile kind.
+                    type: string
+                  name:
+                    description: Name contains the name of the referenced CloudProfile.
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
             type: object
           status:
             description: GardenerShootClusterStatus defines the observed state of
               GardenerShootCluster.
+            properties:
+              ready:
+                description: |-
+                  Ready denotes that the foo cluster infrastructure is fully provisioned.
+                  NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
+                  The value of this field is never updated after provisioning is completed. Please use conditions
+                  to check the operational state of the infa cluster.
+                type: boolean
             type: object
         type: object
     served: true
