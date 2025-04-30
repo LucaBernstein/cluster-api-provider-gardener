@@ -19,6 +19,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/gardener/cluster-api-provider-gardener/api"
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	"github.com/gardener/cluster-api-provider-gardener/test/utils"
 )
@@ -269,7 +271,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should create a GardenerShootControlPlane with a hibernated Shoot", func(ctx SpecContext) {
 			By("create client")
 			clusterClient, err := kubernetes.NewClientFromFile("", os.Getenv("KUBECONFIG"),
-				kubernetes.WithClientOptions(client.Options{Scheme: controlplanev1alpha1.Scheme}),
+				kubernetes.WithClientOptions(client.Options{Scheme: api.Scheme}),
 				kubernetes.WithClientConnectionOptions(
 					componentbaseconfigv1alpha1.ClientConnectionConfiguration{QPS: 100, Burst: 130}),
 				kubernetes.WithAllowedUserFields([]string{kubernetes.AuthTokenFile}),
@@ -288,19 +290,35 @@ var _ = Describe("Manager", Ordered, func() {
 				},
 				Spec: controlplanev1alpha1.GardenerShootControlPlaneSpec{
 					ProjectNamespace: "garden-local",
-					ShootSpec: gardenercorev1beta1.ShootSpec{
-						CloudProfile: &gardenercorev1beta1.CloudProfileReference{Name: "local"},
-						Provider:     gardenercorev1beta1.Provider{Type: "local"},
-						Kubernetes:   gardenercorev1beta1.Kubernetes{Version: "1.32"},
-						Region:       "local",
-						Hibernation:  &gardenercorev1beta1.Hibernation{Enabled: ptr.To(true)},
-					},
+					Provider:         gardenercorev1beta1.Provider{Type: "local"},
+					Kubernetes:       gardenercorev1beta1.Kubernetes{Version: "1.32"},
+					Region:           "local",
+					Hibernation:      &gardenercorev1beta1.Hibernation{Enabled: ptr.To(true)},
 				},
 			}
 
 			By("create control plane")
 			Eventually(func() error {
 				return clusterClient.Client().Create(ctx, controlPlaneSpec)
+			}).Should(Succeed())
+
+			infraClusterSpec := &infrastructurev1alpha1.GardenerShootCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "cp-e2e-",
+					Namespace:    "default",
+					Labels: map[string]string{
+						"app.kubernetes.io/name":       "cluster-api-provider-gardener",
+						"app.kubernetes.io/managed-by": "kustomize",
+					},
+				},
+				Spec: infrastructurev1alpha1.GardenerShootClusterSpec{
+					CloudProfile: &gardenercorev1beta1.CloudProfileReference{Name: "local"},
+				},
+			}
+
+			By("create infra cluster")
+			Eventually(func() error {
+				return clusterClient.Client().Create(ctx, infraClusterSpec)
 			}).Should(Succeed())
 
 			clusterSpec := &v1beta1.Cluster{
@@ -310,6 +328,12 @@ var _ = Describe("Manager", Ordered, func() {
 						APIVersion: "controlplane.cluster.x-k8s.io/v1alpha1",
 						Kind:       "GardenerShootControlPlane",
 						Name:       controlPlaneSpec.Name,
+						Namespace:  "default",
+					},
+					InfrastructureRef: &v1.ObjectReference{
+						APIVersion: "infrastructure.cluster.x-k8s.io/v1alpha1",
+						Kind:       "GardenerShootCluster",
+						Name:       infraClusterSpec.Name,
 						Namespace:  "default",
 					},
 				},
