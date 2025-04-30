@@ -39,7 +39,7 @@ type GardenerShootClusterSpec struct {
 
 // GardenerShootClusterStatus defines the observed state of GardenerShootCluster.
 type GardenerShootClusterStatus struct {
-	// Ready denotes that the foo cluster infrastructure is fully provisioned.
+	// Ready denotes that the Seed where the Shoot is hosted is ready.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the infa cluster.
