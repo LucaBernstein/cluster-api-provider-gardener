@@ -49,6 +49,7 @@ import (
 	controlplanecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
 	infrastructurecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/infrastructure"
 	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/controlplane/v1alpha1"
+	webhookinfrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/infrastructure/v1alpha1"
 )
 
 var (
@@ -318,6 +319,13 @@ func main() {
 		}
 	} else {
 		setupLog.Info("Skipping webhook setup")
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookinfrastructurev1alpha1.SetupGardenerShootClusterWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "GardenerShootCluster")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

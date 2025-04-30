@@ -30,4 +30,7 @@ resources:
   kind: GardenerShootCluster
   path: github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 version: "3"
