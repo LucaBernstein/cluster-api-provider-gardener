@@ -60,12 +60,12 @@ type GardenerShootControlPlaneReconciler struct {
 }
 
 type ControlPlaneContext struct {
-	log logr.Logger
 	ctx context.Context
 
 	cluster           *v1beta1.Cluster
 	shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane
 	shoot             *gardenercorev1beta1.Shoot
+	clusterName       string
 }
 
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
@@ -89,13 +89,14 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 		clusterName: req.ClusterName,
 	}
 
-	log.Info("Getting GardenerShootControlPlane object")
+	log.Info("Reconciling GardenerShootControlPlane")
 	cpc.shootControlPlane = &controlplanev1alpha1.GardenerShootControlPlane{}
 	if err := r.Client.Get(cpc.ctx, req.NamespacedName, cpc.shootControlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("resource no longer exists")
+			log.Info("GardenerShootControlPlane not found or already deleted")
 			return ctrl.Result{}, nil
 		}
+		log.Error(err, "Failed to get GardenerShootControlPlane")
 		return ctrl.Result{}, err
 	}
 
@@ -110,9 +111,20 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	cpc.shoot = ShootFromControlPlane(cpc.shootControlPlane)
-	injectReferenceLabels(cpc.shoot, cpc.shootControlPlane, r.IsKCP, req.ClusterName)
+	if annotations.IsPaused(cpc.cluster, cpc.shootControlPlane) {
+		log.Info("GardenerShootControlPlane or linked Cluster is marked as paused. Won't reconcile")
+		return ctrl.Result{}, nil
+	}
 
+	// Setting the name and namespace of the shoot object here.
+	// This is needed to be able to delete the shoot, as well as fetch into this resource.
+	shootID := providerutil.ShootNameFromCAPIResources(*cpc.cluster, *cpc.shootControlPlane)
+	cpc.shoot = &gardenercorev1beta1.Shoot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      shootID.Name,
+			Namespace: shootID.Namespace,
+		},
+	}
 	// Handle deleted clusters
 	if !cpc.shootControlPlane.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(cpc)
@@ -123,8 +135,7 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext) (ctrl.Result, error) {
-	log := cpc.log
-	log.Info("Reconciling GardenerShootControlPlane")
+	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "reconcile")
 
 	log.Info("Adding finalizer to GardenerShootControlPlane")
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
@@ -144,6 +155,8 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 			log.Error(err, "Failed to create shoot")
 			return ctrl.Result{}, err
 		}
+		log.Info("Shoot created successfully")
+		return ctrl.Result{}, nil
 	}
 
 	if err := r.updateStatus(cpc); err != nil {
@@ -200,7 +213,7 @@ func (r *GardenerShootControlPlaneReconciler) createShoot(cpc ControlPlaneContex
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneContext) (ctrl.Result, error) {
-	log := cpc.log
+	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "delete")
 	log.Info("Reconciling Delete GardenerShootControlPlane")
 
 	err := r.Client.Delete(cpc.ctx, newEmptyShootAccessSecret(cpc.cluster))
@@ -210,7 +223,6 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 		}
 		log.Info("Shoot Access Secret not found")
 	}
-
 	err = r.GardenerClient.Get(cpc.ctx, client.ObjectKeyFromObject(cpc.shoot), cpc.shoot)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -311,6 +323,7 @@ func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 }
 
 func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlPlaneContext) error {
+	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "syncSpecs")
 	var (
 		err error
 
@@ -325,20 +338,17 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 	providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
 
 	// patch the shoot cluster object from the GardenerShootControlPlane object.
-	cpc.log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
+	log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
 	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
 	if err != nil {
-		cpc.log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Cluster Shoot")
+		log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
 	}
 
 	// sync back the shoot state (also, if above sync failed).
-	cpc.log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
+	log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
 	err1 := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane)
 	if err1 != nil {
-		cpc.log.Error(err, "Error while syncing Gardener Cluster Shoot to GardenerShootControlPlane")
-		if err != nil {
-			return err
-		}
+		log.Error(err1, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
 	}
 	return err1
 }
