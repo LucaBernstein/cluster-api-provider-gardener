@@ -138,7 +138,8 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 			return ctrl.Result{}, err
 		}
 		log.Info("Shoot not found, creating it")
-		if err := r.GardenerClient.Create(cpc.ctx, cpc.shoot); err != nil {
+		if err := r.createShoot(cpc); err != nil {
+			log.Error(err, "Failed to create shoot")
 			return ctrl.Result{}, err
 		}
 	}
@@ -178,6 +179,22 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *GardenerShootControlPlaneReconciler) createShoot(cpc ControlPlaneContext) error {
+	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "createShoot")
+	infraCluster := &infrastructurev1alpha1.GardenerShootCluster{}
+	if err := r.Client.Get(cpc.ctx, types.NamespacedName{
+		Name:      cpc.cluster.Spec.InfrastructureRef.Name,
+		Namespace: cpc.cluster.Spec.InfrastructureRef.Namespace,
+	}, infraCluster); err != nil {
+		log.Error(err, "Failed to get infrastructureCluster")
+		return err
+	}
+
+	shoot := providerutil.ShootFromCAPIResources(*cpc.cluster, *cpc.shootControlPlane, *infraCluster)
+	injectReferenceLabels(shoot, cpc.shootControlPlane, infraCluster, r.IsKCP, cpc.clusterName)
+	return r.GardenerClient.Create(cpc.ctx, shoot)
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneContext) (ctrl.Result, error) {
@@ -349,13 +366,18 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 	return false
 }
 
-func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane, isKCP bool, kcpClusterName string) {
+func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane, infraCluster *infrastructurev1alpha1.GardenerShootCluster, isKCP bool, kcpClusterName string) {
 	labels := map[string]string{
 		controlplanev1alpha1.GSCPReferenceNameKey:      shootControlPlane.Name,
 		controlplanev1alpha1.GSCPReferenceNamespaceKey: shootControlPlane.Namespace,
+
+		infrastructurev1alpha1.GSCReferenceNameKey:      infraCluster.Name,
+		infrastructurev1alpha1.GSCReferenceNamespaceKey: infraCluster.Namespace,
 	}
 	if isKCP {
 		labels[controlplanev1alpha1.GSCPReferecenceClusterNameKey] = kcpClusterName
+
+		labels[infrastructurev1alpha1.GSCReferecenceClusterNameKey] = kcpClusterName
 	}
 
 	if shoot.Labels == nil {
@@ -365,17 +387,6 @@ func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *
 			shoot.Labels[k] = v
 		}
 	}
-}
-
-func ShootFromControlPlane(shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane) *gardenercorev1beta1.Shoot {
-	return &gardenercorev1beta1.Shoot{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      shootControlPlane.Name,
-			Namespace: shootControlPlane.Spec.ProjectNamespace,
-		},
-		Spec: shootControlPlane.Spec.ShootSpec,
-	}
-
 }
 
 // SetupWithManager sets up the controller with the Manager.
