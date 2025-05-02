@@ -292,8 +292,7 @@ var _ = Describe("Manager", Ordered, func() {
 					ProjectNamespace: "garden-local",
 					Provider:         gardenercorev1beta1.Provider{Type: "local"},
 					Kubernetes:       gardenercorev1beta1.Kubernetes{Version: "1.32"},
-					Region:           "local",
-					Hibernation:      &gardenercorev1beta1.Hibernation{Enabled: ptr.To(true)},
+					CloudProfile:     &gardenercorev1beta1.CloudProfileReference{Name: "local"},
 				},
 			}
 
@@ -312,7 +311,8 @@ var _ = Describe("Manager", Ordered, func() {
 					},
 				},
 				Spec: infrastructurev1alpha1.GardenerShootClusterSpec{
-					CloudProfile: &gardenercorev1beta1.CloudProfileReference{Name: "local"},
+					Region:      "local",
+					Hibernation: &gardenercorev1beta1.Hibernation{Enabled: ptr.To(true)},
 				},
 			}
 

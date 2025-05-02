@@ -24,7 +24,9 @@ spec:
   # Defaulted to this objects namespace if not provided.
   projectNamespace: garden-local
 
-  region: local
+  cloudProfile:
+    kind: CloudProfile
+    name: local
   provider:
     type: local
   kubernetes:
@@ -38,6 +40,4 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: hello-gardener
 spec:
-  cloudProfile:
-    kind: CloudProfile
-    name: local
+  region: local
