@@ -110,20 +110,10 @@ func (in *GardenerShootControlPlaneSpec) DeepCopyInto(out *GardenerShootControlP
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.Hibernation != nil {
-		in, out := &in.Hibernation, &out.Hibernation
-		*out = new(v1beta1.Hibernation)
-		(*in).DeepCopyInto(*out)
-	}
 	in.Kubernetes.DeepCopyInto(&out.Kubernetes)
 	if in.Networking != nil {
 		in, out := &in.Networking, &out.Networking
 		*out = new(v1beta1.Networking)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.Maintenance != nil {
-		in, out := &in.Maintenance, &out.Maintenance
-		*out = new(v1beta1.Maintenance)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Monitoring != nil {
@@ -141,16 +131,6 @@ func (in *GardenerShootControlPlaneSpec) DeepCopyInto(out *GardenerShootControlP
 		in, out := &in.SecretBindingName, &out.SecretBindingName
 		*out = new(string)
 		**out = **in
-	}
-	if in.SeedName != nil {
-		in, out := &in.SeedName, &out.SeedName
-		*out = new(string)
-		**out = **in
-	}
-	if in.SeedSelector != nil {
-		in, out := &in.SeedSelector, &out.SeedSelector
-		*out = new(v1beta1.SeedSelector)
-		(*in).DeepCopyInto(*out)
 	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
@@ -182,6 +162,11 @@ func (in *GardenerShootControlPlaneSpec) DeepCopyInto(out *GardenerShootControlP
 	if in.SchedulerName != nil {
 		in, out := &in.SchedulerName, &out.SchedulerName
 		*out = new(string)
+		**out = **in
+	}
+	if in.CloudProfile != nil {
+		in, out := &in.CloudProfile, &out.CloudProfile
+		*out = new(v1beta1.CloudProfileReference)
 		**out = **in
 	}
 	if in.CredentialsBindingName != nil {
