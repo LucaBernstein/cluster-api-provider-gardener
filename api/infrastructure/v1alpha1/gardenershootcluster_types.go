@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,9 +32,21 @@ const (
 
 // GardenerShootClusterSpec defines the desired state of GardenerShootCluster.
 type GardenerShootClusterSpec struct {
-	// CloudProfile contains a reference to a CloudProfile or a NamespacedCloudProfile.
+	// Hibernation contains information whether the Shoot is suspended or not.
 	// +optional
-	CloudProfile *v1beta1.CloudProfileReference `json:"cloudProfile,omitempty"`
+	Hibernation *gardenercorev1beta1.Hibernation `json:"hibernation,omitempty" protobuf:"bytes,5,opt,name=hibernation"`
+	// Maintenance contains information about the time window for maintenance operations and which
+	// operations should be performed.
+	// +optional
+	Maintenance *gardenercorev1beta1.Maintenance `json:"maintenance,omitempty" protobuf:"bytes,8,opt,name=maintenance"`
+	// Region is a name of a region. This field is immutable.
+	Region string `json:"region" protobuf:"bytes,12,opt,name=region"`
+	// SeedName is the name of the seed cluster that runs the control plane of the Shoot.
+	// +optional
+	SeedName *string `json:"seedName,omitempty" protobuf:"bytes,14,opt,name=seedName"`
+	// SeedSelector is an optional selector which must match a seed's labels for the shoot to be scheduled on that seed.
+	// +optional
+	SeedSelector *gardenercorev1beta1.SeedSelector `json:"seedSelector,omitempty" protobuf:"bytes,15,opt,name=seedSelector"`
 }
 
 // GardenerShootClusterStatus defines the observed state of GardenerShootCluster.

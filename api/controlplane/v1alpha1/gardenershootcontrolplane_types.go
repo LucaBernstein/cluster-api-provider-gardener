@@ -82,18 +82,11 @@ type GardenerShootControlPlaneSpec struct {
 	// Extensions contain type and provider information for Shoot extensions.
 	// +optional
 	Extensions []gardenercorev1beta1.Extension `json:"extensions,omitempty" protobuf:"bytes,4,rep,name=extensions"`
-	// Hibernation contains information whether the Shoot is suspended or not.
-	// +optional
-	Hibernation *gardenercorev1beta1.Hibernation `json:"hibernation,omitempty" protobuf:"bytes,5,opt,name=hibernation"`
 	// Kubernetes contains the version and configuration settings of the control plane components.
 	Kubernetes gardenercorev1beta1.Kubernetes `json:"kubernetes" protobuf:"bytes,6,opt,name=kubernetes"`
 	// Networking contains information about cluster networking such as CNI Plugin type, CIDRs, ...etc.
 	// +optional
 	Networking *gardenercorev1beta1.Networking `json:"networking,omitempty" protobuf:"bytes,7,opt,name=networking"`
-	// Maintenance contains information about the time window for maintenance operations and which
-	// operations should be performed.
-	// +optional
-	Maintenance *gardenercorev1beta1.Maintenance `json:"maintenance,omitempty" protobuf:"bytes,8,opt,name=maintenance"`
 	// Monitoring contains information about custom monitoring configurations for the shoot.
 	// +optional
 	Monitoring *gardenercorev1beta1.Monitoring `json:"monitoring,omitempty" protobuf:"bytes,9,opt,name=monitoring"`
@@ -102,20 +95,12 @@ type GardenerShootControlPlaneSpec struct {
 	// Purpose is the purpose class for this cluster.
 	// +optional
 	Purpose *gardenercorev1beta1.ShootPurpose `json:"purpose,omitempty" protobuf:"bytes,11,opt,name=purpose,casttype=ShootPurpose"`
-	// Region is a name of a region. This field is immutable.
-	Region string `json:"region" protobuf:"bytes,12,opt,name=region"`
 	// SecretBindingName is the name of a SecretBinding that has a reference to the provider secret.
 	// The credentials inside the provider secret will be used to create the shoot in the respective account.
 	// The field is mutually exclusive with CredentialsBindingName.
 	// This field is immutable.
 	// +optional
 	SecretBindingName *string `json:"secretBindingName,omitempty" protobuf:"bytes,13,opt,name=secretBindingName"`
-	// SeedName is the name of the seed cluster that runs the control plane of the Shoot.
-	// +optional
-	SeedName *string `json:"seedName,omitempty" protobuf:"bytes,14,opt,name=seedName"`
-	// SeedSelector is an optional selector which must match a seed's labels for the shoot to be scheduled on that seed.
-	// +optional
-	SeedSelector *gardenercorev1beta1.SeedSelector `json:"seedSelector,omitempty" protobuf:"bytes,15,opt,name=seedSelector"`
 	// Resources holds a list of named resource references that can be referred to in extension configs by their names.
 	// +optional
 	Resources []gardenercorev1beta1.NamedResourceReference `json:"resources,omitempty" protobuf:"bytes,16,rep,name=resources"`
@@ -139,6 +124,9 @@ type GardenerShootControlPlaneSpec struct {
 	// This field is immutable.
 	// +optional
 	SchedulerName *string `json:"schedulerName,omitempty" protobuf:"bytes,21,opt,name=schedulerName"`
+	// CloudProfile contains a reference to a CloudProfile or a NamespacedCloudProfile.
+	// +optional
+	CloudProfile *gardenercorev1beta1.CloudProfileReference `json:"cloudProfile,omitempty"`
 	// CredentialsBindingName is the name of a CredentialsBinding that has a reference to the provider credentials.
 	// The credentials will be used to create the shoot in the respective account. The field is mutually exclusive with SecretBindingName.
 	// +optional
