@@ -154,7 +154,7 @@ type GardenerShootControlPlaneStatus struct {
 	// +optional
 	ShootStatus gardenercorev1beta1.ShootStatus `json:"shootStatus"`
 
-	// Initialized denotes that the foo Gardener Shoot control plane API Server is initialized and thus
+	// Initialized denotes that the Gardener Shoot control plane API Server is initialized and thus
 	// it can accept requests.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
@@ -163,7 +163,7 @@ type GardenerShootControlPlaneStatus struct {
 	// +kubebuilder:default=false
 	Initialized bool `json:"initialized"`
 
-	// Ready denotes that the foo control plane is ready to serve requests.
+	// Ready denotes that the Gardener Shoot control plane is ready to serve requests.
 	// NOTE: this field is part of the Cluster API contract and it is used to orchestrate provisioning.
 	// The value of this field is never updated after provisioning is completed. Please use conditions
 	// to check the operational state of the control plane.
