@@ -24,84 +24,70 @@ func ShootFromCAPIResources(
 ) *gardenercorev1beta1.Shoot {
 	namespacedName := ShootNameFromCAPIResources(capiCluster, controlPlane)
 
-	infraSpec := infraCluster.Spec
-	controlPlaneSpec := controlPlane.Spec
-
 	return &gardenercorev1beta1.Shoot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
 			Namespace: namespacedName.Namespace,
 		},
 		Spec: gardenercorev1beta1.ShootSpec{
-			Addons:                 controlPlaneSpec.Addons,
-			DNS:                    controlPlaneSpec.DNS,
-			Extensions:             controlPlaneSpec.Extensions,
-			Hibernation:            controlPlaneSpec.Hibernation,
-			Kubernetes:             controlPlaneSpec.Kubernetes,
-			Networking:             controlPlaneSpec.Networking,
-			Maintenance:            controlPlaneSpec.Maintenance,
-			Monitoring:             controlPlaneSpec.Monitoring,
-			Provider:               controlPlaneSpec.Provider,
-			Purpose:                controlPlaneSpec.Purpose,
-			Region:                 controlPlaneSpec.Region,
-			SecretBindingName:      controlPlaneSpec.SecretBindingName,
-			SeedName:               controlPlaneSpec.SeedName,
-			SeedSelector:           controlPlaneSpec.SeedSelector,
-			Resources:              controlPlaneSpec.Resources,
-			Tolerations:            controlPlaneSpec.Tolerations,
-			ExposureClassName:      controlPlaneSpec.ExposureClassName,
-			SystemComponents:       controlPlaneSpec.SystemComponents,
-			ControlPlane:           controlPlaneSpec.ControlPlane,
-			SchedulerName:          controlPlaneSpec.SchedulerName,
-			CloudProfile:           infraSpec.CloudProfile,
-			CredentialsBindingName: controlPlaneSpec.CredentialsBindingName,
-			AccessRestrictions:     controlPlaneSpec.AccessRestrictions,
+			Addons:                 controlPlane.Spec.Addons,
+			DNS:                    controlPlane.Spec.DNS,
+			Extensions:             controlPlane.Spec.Extensions,
+			Hibernation:            infraCluster.Spec.Hibernation,
+			Kubernetes:             controlPlane.Spec.Kubernetes,
+			Networking:             controlPlane.Spec.Networking,
+			Maintenance:            infraCluster.Spec.Maintenance,
+			Monitoring:             controlPlane.Spec.Monitoring,
+			Provider:               controlPlane.Spec.Provider,
+			Purpose:                controlPlane.Spec.Purpose,
+			Region:                 infraCluster.Spec.Region,
+			SecretBindingName:      controlPlane.Spec.SecretBindingName,
+			SeedName:               infraCluster.Spec.SeedName,
+			SeedSelector:           infraCluster.Spec.SeedSelector,
+			Resources:              controlPlane.Spec.Resources,
+			Tolerations:            controlPlane.Spec.Tolerations,
+			ExposureClassName:      controlPlane.Spec.ExposureClassName,
+			SystemComponents:       controlPlane.Spec.SystemComponents,
+			ControlPlane:           controlPlane.Spec.ControlPlane,
+			SchedulerName:          controlPlane.Spec.SchedulerName,
+			CloudProfile:           controlPlane.Spec.CloudProfile,
+			CredentialsBindingName: controlPlane.Spec.CredentialsBindingName,
+			AccessRestrictions:     controlPlane.Spec.AccessRestrictions,
 		},
 	}
 }
 
 func SyncShootSpecFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
-	controlPlaneSpec := controlPlane.Spec
 
-	shoot.Spec.Addons = controlPlaneSpec.Addons
-	shoot.Spec.DNS = controlPlaneSpec.DNS
-	shoot.Spec.Extensions = controlPlaneSpec.Extensions
-	shoot.Spec.Hibernation = controlPlaneSpec.Hibernation
-	shoot.Spec.Kubernetes = controlPlaneSpec.Kubernetes
-	shoot.Spec.Networking = controlPlaneSpec.Networking
-	shoot.Spec.Maintenance = controlPlaneSpec.Maintenance
-	shoot.Spec.Monitoring = controlPlaneSpec.Monitoring
-	shoot.Spec.Provider = controlPlaneSpec.Provider
-	shoot.Spec.Purpose = controlPlaneSpec.Purpose
-	shoot.Spec.Region = controlPlaneSpec.Region
-	shoot.Spec.SecretBindingName = controlPlaneSpec.SecretBindingName
+	shoot.Spec.Addons = controlPlane.Spec.Addons
+	shoot.Spec.DNS = controlPlane.Spec.DNS
+	shoot.Spec.Extensions = controlPlane.Spec.Extensions
+	shoot.Spec.Kubernetes = controlPlane.Spec.Kubernetes
+	shoot.Spec.Networking = controlPlane.Spec.Networking
+	shoot.Spec.Monitoring = controlPlane.Spec.Monitoring
+	shoot.Spec.Provider = controlPlane.Spec.Provider
+	shoot.Spec.Purpose = controlPlane.Spec.Purpose
+	shoot.Spec.SecretBindingName = controlPlane.Spec.SecretBindingName
 	// Let's not allow updates on SeedName as this causes the reconciler to not be able to update anything
-	// shoot.Spec.SeedName = controlPlaneSpec.SeedName
-	shoot.Spec.SeedSelector = controlPlaneSpec.SeedSelector
-	shoot.Spec.Resources = controlPlaneSpec.Resources
-	shoot.Spec.Tolerations = controlPlaneSpec.Tolerations
-	shoot.Spec.ExposureClassName = controlPlaneSpec.ExposureClassName
-	shoot.Spec.SystemComponents = controlPlaneSpec.SystemComponents
-	shoot.Spec.ControlPlane = controlPlaneSpec.ControlPlane
-	shoot.Spec.SchedulerName = controlPlaneSpec.SchedulerName
+	// shoot.Spec.SeedName = controlPlane.Spec.SeedName
+	shoot.Spec.Resources = controlPlane.Spec.Resources
+	shoot.Spec.Tolerations = controlPlane.Spec.Tolerations
+	shoot.Spec.ExposureClassName = controlPlane.Spec.ExposureClassName
+	shoot.Spec.SystemComponents = controlPlane.Spec.SystemComponents
+	shoot.Spec.ControlPlane = controlPlane.Spec.ControlPlane
+	shoot.Spec.SchedulerName = controlPlane.Spec.SchedulerName
 }
 
 func SyncGSCPSpecFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
 	controlPlane.Spec.Addons = shoot.Spec.Addons
 	controlPlane.Spec.DNS = shoot.Spec.DNS
 	controlPlane.Spec.Extensions = shoot.Spec.Extensions
-	controlPlane.Spec.Hibernation = shoot.Spec.Hibernation
 	controlPlane.Spec.Kubernetes = shoot.Spec.Kubernetes
 	controlPlane.Spec.Networking = shoot.Spec.Networking
-	controlPlane.Spec.Maintenance = shoot.Spec.Maintenance
 	controlPlane.Spec.Monitoring = shoot.Spec.Monitoring
 	controlPlane.Spec.Provider = shoot.Spec.Provider
 	controlPlane.Spec.Purpose = shoot.Spec.Purpose
-	controlPlane.Spec.Region = shoot.Spec.Region
 	controlPlane.Spec.SecretBindingName = shoot.Spec.SecretBindingName
-	// Let's not allow updates on SeedName as this causes the reconciler to not be able to update anything
-	// shoot.Spec.SeedName = controlPlaneSpec.SeedName
-	controlPlane.Spec.SeedSelector = shoot.Spec.SeedSelector
 	controlPlane.Spec.Resources = shoot.Spec.Resources
 	controlPlane.Spec.Tolerations = shoot.Spec.Tolerations
 	controlPlane.Spec.ExposureClassName = shoot.Spec.ExposureClassName
@@ -112,10 +98,26 @@ func SyncGSCPSpecFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *contr
 	controlPlane.Spec.AccessRestrictions = shoot.Spec.AccessRestrictions
 }
 
-func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, cluster *infrastructurev1alpha1.GardenerShootCluster) {
-	shoot.Spec.CloudProfile = cluster.Spec.CloudProfile
+func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
+	shoot.Spec.Hibernation = infraCluster.Spec.Hibernation
+	// Do not allow to nil the maintenance field as this will cause a potential eternal reconciliation loop,
+	// because the maintenance time window is defaulted to a random time window, which causes problems when syncing.
+	if infraCluster.Spec.Hibernation != nil {
+		shoot.Spec.Maintenance = infraCluster.Spec.Maintenance
+	}
+	shoot.Spec.Region = infraCluster.Spec.Region
+	shoot.Spec.SeedName = infraCluster.Spec.SeedName
+	shoot.Spec.SeedSelector = infraCluster.Spec.SeedSelector
 }
 
-func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, cluster *infrastructurev1alpha1.GardenerShootCluster) {
-	cluster.Spec.CloudProfile = shoot.Spec.CloudProfile
+func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
+	infraCluster.Spec.Hibernation = shoot.Spec.Hibernation
+	// Do not allow to nil the maintenance field as this will cause a potential eternal reconciliation loop,
+	// because the maintenance time window is defaulted to a random time window, which causes problems when syncing.
+	if shoot.Spec.Hibernation != nil {
+		infraCluster.Spec.Maintenance = shoot.Spec.Maintenance
+	}
+	infraCluster.Spec.Region = shoot.Spec.Region
+	infraCluster.Spec.SeedName = shoot.Spec.SeedName
+	infraCluster.Spec.SeedSelector = shoot.Spec.SeedSelector
 }
