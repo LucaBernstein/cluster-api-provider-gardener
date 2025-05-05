@@ -13,6 +13,16 @@ spec:
     name: hello-gardener
     namespace: default
 ---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: GardenerShootCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-gardener
+    app.kubernetes.io/managed-by: kustomize
+  name: hello-gardener
+spec:
+  region: local
+---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha1
 kind: GardenerShootControlPlane
 metadata:
@@ -31,13 +41,3 @@ spec:
     type: local
   kubernetes:
     version: "1.32"
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-kind: GardenerShootCluster
-metadata:
-  labels:
-    app.kubernetes.io/name: cluster-api-provider-gardener
-    app.kubernetes.io/managed-by: kustomize
-  name: hello-gardener
-spec:
-  region: local

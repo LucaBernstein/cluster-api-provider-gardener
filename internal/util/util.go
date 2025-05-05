@@ -58,7 +58,6 @@ func ShootFromCAPIResources(
 }
 
 func SyncShootSpecFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
-
 	shoot.Spec.Addons = controlPlane.Spec.Addons
 	shoot.Spec.DNS = controlPlane.Spec.DNS
 	shoot.Spec.Extensions = controlPlane.Spec.Extensions
