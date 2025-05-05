@@ -20,15 +20,17 @@ import (
 	"context"
 	"fmt"
 
+	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
+	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"
 )
 
 // nolint:unused
@@ -40,6 +42,7 @@ func SetupGardenerShootControlPlaneWebhookWithManager(mgr ctrl.Manager, gardener
 	return ctrl.NewWebhookManagedBy(mgr).For(&controlplanev1alpha1.GardenerShootControlPlane{}).
 		WithValidator(&GardenerShootControlPlaneCustomValidator{
 			GardenerClient: gardenerClient,
+			Client:         mgr.GetClient(),
 		}).
 		WithDefaulter(&GardenerShootControlPlaneCustomDefaulter{}).
 		Complete()
@@ -78,18 +81,16 @@ func (d GardenerShootControlPlaneCustomDefaulter) Default(ctx context.Context, o
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type GardenerShootControlPlaneCustomValidator struct {
 	GardenerClient client.Client
+	Client         client.Client
 }
 
 var _ webhook.CustomValidator = &GardenerShootControlPlaneCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootControlPlane.
 func (v *GardenerShootControlPlaneCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	shootControlPlane, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
-	if !ok {
-		return nil, fmt.Errorf("expected a GardenerShootControlPlane object but got %T", obj)
-	}
-
-	return nil, v.GardenerClient.Create(ctx, controller.ShootFromControlPlane(shootControlPlane), &client.CreateOptions{DryRun: []string{"All"}})
+	// Do not validate anything here, as the shoot does not exist, and all CAPI resources need to be put together to
+	// initially create the shoot spec.
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootControlPlane.
@@ -100,12 +101,16 @@ func (v *GardenerShootControlPlaneCustomValidator) ValidateUpdate(ctx context.Co
 	}
 
 	// For the update, we need to get the actual cluster and inject the new config, because e.g. the resourceVersion must be set.
-	shoot := controller.ShootFromControlPlane(shootControlPlane)
-	if err := v.GardenerClient.Get(ctx, client.ObjectKeyFromObject(shoot), shoot); err != nil {
+	cluster, err := util.GetOwnerCluster(ctx, v.Client, shootControlPlane.ObjectMeta)
+	if err != nil {
+		return nil, fmt.Errorf("could not get owner cluster: %w", err)
+	}
+	shoot := &gardenercorev1beta1.Shoot{}
+	if err := v.GardenerClient.Get(ctx, providerutil.ShootNameFromCAPIResources(*cluster, *shootControlPlane), shoot); err != nil {
 		return nil, client.IgnoreNotFound(err)
 	}
 
-	shoot.Spec = shootControlPlane.Spec.ShootSpec
+	providerutil.SyncShootSpecFromGSCP(shoot, shootControlPlane)
 
 	// During deletion, it can happen that the Shoot wants to be patched, when it does not exist anymore,
 	// therefore ignoring this error to prevent the reconciliation to be blocked.

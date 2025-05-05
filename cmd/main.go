@@ -44,9 +44,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/v1alpha1"
-	"github.com/gardener/cluster-api-provider-gardener/internal/controller"
-	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/v1alpha1"
+	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api"
+	controllercluster "github.com/gardener/cluster-api-provider-gardener/internal/controller/cluster"
+	controlplanecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/controlplane"
+	infrastructurecontroller "github.com/gardener/cluster-api-provider-gardener/internal/controller/infrastructure"
+	webhookcontrolplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/controlplane/v1alpha1"
+	webhookinfrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/internal/webhook/infrastructure/v1alpha1"
 )
 
 var (
@@ -279,7 +282,7 @@ func main() {
 	// Create reconcilers
 	if isKcp {
 		setupLog.Info("Setting up Cluster reconciler, because KCP API Group is present")
-		if err = (&controller.ClusterController{
+		if err = (&controllercluster.ClusterController{
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {
@@ -288,13 +291,23 @@ func main() {
 		}
 	}
 
-	if err = (&controller.GardenerShootControlPlaneReconciler{
+	if err = (&controlplanecontroller.GardenerShootControlPlaneReconciler{
 		Client:         mgr.GetClient(),
 		GardenerClient: gardenMgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		IsKCP:          isKcp,
 	}).SetupWithManager(mgr, gardenMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
+		os.Exit(1)
+	}
+
+	if err = (&infrastructurecontroller.GardenerShootClusterReconciler{
+		Client:         mgr.GetClient(),
+		GardenerClient: gardenMgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		IsKCP:          isKcp,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster")
 		os.Exit(1)
 	}
 	// nolint:goconst
@@ -306,6 +319,14 @@ func main() {
 		}
 	} else {
 		setupLog.Info("Skipping webhook setup")
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookinfrastructurev1alpha1.
+			SetupGardenerShootClusterWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "GardenerShootCluster")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
