@@ -19,10 +19,6 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/kcp"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
 
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -36,8 +32,12 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"

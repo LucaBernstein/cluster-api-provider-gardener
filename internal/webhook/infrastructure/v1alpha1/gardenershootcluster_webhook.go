@@ -115,7 +115,5 @@ func (v *GardenerShootClusterCustomValidator) ValidateDelete(ctx context.Context
 		return nil, fmt.Errorf("expected a GardenerShootCluster object but got %T", obj)
 	}
 
-	// TODO(user): fill in your validation logic upon object deletion.
-
 	return nil, nil
 }

@@ -4,6 +4,7 @@
 resources:
 - bases/controlplane.cluster.x-k8s.io_gardenershootcontrolplanes.yaml
 - bases/infrastructure.cluster.x-k8s.io_gardenershootclusters.yaml
+- bases/infrastructure.cluster.x-k8s.io_gardenerworkerpools.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 commonLabels:
