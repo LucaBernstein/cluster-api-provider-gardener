@@ -328,6 +328,23 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if err = (&infrastructurecontroller.GardenerWorkerPoolReconciler{
+		Client:         mgr.GetClient(),
+		GardenerClient: gardenMgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		IsKCP:          isKcp,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerWorkerPool")
+		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookinfrastructurev1alpha1.
+			SetupGardenerWorkerPoolWebhookWithManager(mgr, gardenMgr.GetClient()); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "GardenerWorkerPool")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
