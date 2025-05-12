@@ -19,13 +19,14 @@ package v1alpha1
 import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
-	GSCPReferenceNamespaceKey     = "controlplane.cluster.x-k8s.io/gscp_namespace"
-	GSCPReferenceNameKey          = "controlplane.cluster.x-k8s.io/gscp_name"
-	GSCPReferecenceClusterNameKey = "controlplane.cluster.x-k8s.io/gscp_cluster"
+	GSCPReferenceNamespaceKey   = "controlplane.cluster.x-k8s.io/gscp_namespace"
+	GSCPReferenceNameKey        = "controlplane.cluster.x-k8s.io/gscp_name"
+	GSCPReferenceClusterNameKey = "controlplane.cluster.x-k8s.io/gscp_cluster"
 )
 
 // +kubebuilder:object:root=true
@@ -49,6 +50,26 @@ type GardenerShootControlPlane struct {
 	Status GardenerShootControlPlaneStatus `json:"status,omitempty"`
 }
 
+// ProviderGSCP contains provider-specific information that are handed-over to the provider-specific
+// extension controller.
+// This only contains the fields that the GSCP is responsible for.
+// The workers are managed through the GardenerWorkerPool CRD.
+type ProviderGSCP struct {
+	// Type is the type of the provider. This field is immutable.
+	Type string `json:"type" protobuf:"bytes,1,opt,name=type"`
+	// ControlPlaneConfig contains the provider-specific control plane config blob. Please look up the concrete
+	// definition in the documentation of your provider extension.
+	// +optional
+	ControlPlaneConfig *runtime.RawExtension `json:"controlPlaneConfig,omitempty" protobuf:"bytes,2,opt,name=controlPlaneConfig"`
+	// InfrastructureConfig contains the provider-specific infrastructure config blob. Please look up the concrete
+	// definition in the documentation of your provider extension.
+	// +optional
+	InfrastructureConfig *runtime.RawExtension `json:"infrastructureConfig,omitempty" protobuf:"bytes,3,opt,name=infrastructureConfig"`
+	// WorkersSettings contains settings for all workers.
+	// +optional
+	WorkersSettings *gardenercorev1beta1.WorkersSettings `json:"workersSettings,omitempty" protobuf:"bytes,5,opt,name=workersSettings"`
+}
+
 // GardenerShootControlPlaneSpec represents the Spec of the Shoot Cluster,
 // as well as the fields defined by the Cluster API contract.
 type GardenerShootControlPlaneSpec struct {
@@ -67,6 +88,10 @@ type GardenerShootControlPlaneSpec struct {
 	// If not set, the namespace of this object will be used in the Gardener cluster.
 	// +optional
 	ProjectNamespace string `json:"projectNamespace,omitempty"`
+
+	// Workerless indicates whether the Shoot is workerless or not.
+	// If set to false, Cluster creation will wait until at least one worker pool is defined.
+	Workerless bool `json:"workerless"`
 
 	// Addons contains information about enabled/disabled addons and their configuration.
 	// +optional
@@ -91,7 +116,7 @@ type GardenerShootControlPlaneSpec struct {
 	// +optional
 	Monitoring *gardenercorev1beta1.Monitoring `json:"monitoring,omitempty" protobuf:"bytes,9,opt,name=monitoring"`
 	// Provider contains all provider-specific and provider-relevant information.
-	Provider gardenercorev1beta1.Provider `json:"provider" protobuf:"bytes,10,opt,name=provider"`
+	Provider ProviderGSCP `json:"provider" protobuf:"bytes,10,opt,name=provider"`
 	// Purpose is the purpose class for this cluster.
 	// +optional
 	Purpose *gardenercorev1beta1.ShootPurpose `json:"purpose,omitempty" protobuf:"bytes,11,opt,name=purpose,casttype=ShootPurpose"`
