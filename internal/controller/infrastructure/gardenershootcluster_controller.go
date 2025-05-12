@@ -222,7 +222,7 @@ func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targ
 				handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerShootClusterObject),
 			),
 		).
-		Complete(r)
+		Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootClusterReconciler) MapShootToGardenerShootClusterObject(ctx context.Context, obj client.Object) []reconcile.Request {
