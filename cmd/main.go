@@ -289,6 +289,15 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "Cluster")
 			os.Exit(1)
 		}
+
+		setupLog.Info("Setting up MachinePool reconciler, because KCP API Group is present")
+		if err = (&controllercluster.MachinePoolController{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MachinePool")
+			os.Exit(1)
+		}
 	}
 
 	if err = (&controlplanecontroller.GardenerShootControlPlaneReconciler{
