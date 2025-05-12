@@ -92,7 +92,7 @@ kind-gardener-up: gardener
 
 .PHONY: clusterctl-init
 clusterctl-init: clusterctl
-	KUBECONFIG=$(GARDENER_KUBECONFIG) $(CLUSTERCTL) init
+	KUBECONFIG=$(GARDENER_KUBECONFIG) EXP_MACHINE_POOL=true $(CLUSTERCTL) init
 
 .PHONY: format
 format: goimports goimports-reviser ## Format imports.
@@ -173,6 +173,12 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	$(eval B64_GARDENER_KUBECONFIG_ENV := $(shell ./hack/gardener-kubeconfig.sh $(GARDENER_KUBECONFIG)))
 	@cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	@$(KUSTOMIZE) build config/overlays/dev | B64_GARDENER_KUBECONFIG=$(B64_GARDENER_KUBECONFIG_ENV) envsubst | $(KUBECTL) apply -f -
+
+.PHONY: deploy-kcp
+deploy-kcp: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	$(eval B64_GARDENER_KUBECONFIG_ENV := $(shell ./hack/gardener-kubeconfig.sh $(GARDENER_KUBECONFIG)))
+	@cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	@$(KUSTOMIZE) build config/overlays/kcp | B64_GARDENER_KUBECONFIG=$(B64_GARDENER_KUBECONFIG_ENV) envsubst | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
