@@ -4,6 +4,7 @@ import (
 	"context"
 
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -273,4 +274,12 @@ func GetMachinePoolForWorkerPool(ctx context.Context, c client.Client, workerPoo
 		}
 	}
 	return machinePool, nil
+}
+
+func IsShootSpecEqual(original, updated *gardenercorev1beta1.Shoot) bool {
+	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
+}
+
+func IsClusterSpecEqual(original, updated *infrastructurev1alpha1.GardenerShootCluster) bool {
+	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }

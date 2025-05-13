@@ -185,28 +185,36 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 		return nil
 	}
 
-	var (
-		originalShoot = shoot.DeepCopy()
-		patchShoot    = client.StrategicMergeFrom(originalShoot)
+	// Deep copy the original objects for patching
+	originalShoot := shoot.DeepCopy()
+	originalInfraCluster := infraCluster.DeepCopy()
 
-		originalInfraCluster = infraCluster.DeepCopy()
-		patchInfraCluster    = client.MergeFrom(originalInfraCluster)
-	)
-
-	// Cross-patch Shoot and GardenerShootCluster objects.
+	// Sync the specs between Shoot and GardenerShootCluster
 	providerutil.SyncShootSpecFromCluster(shoot, originalInfraCluster)
 	providerutil.SyncClusterSpecFromShoot(originalShoot, infraCluster)
 
-	log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
-	if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
-		log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
+	// Check if Shoot spec has changed before patching
+	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
+		log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
+		patchShoot := client.StrategicMergeFrom(originalShoot)
+		if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+			log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in Shoot spec, skipping patch")
 	}
 
-	// sync back the shoot state (also, if above sync failed)
-	log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
-	if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
-		log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
-		return err
+	// Check if GardenerShootCluster spec has changed before patching
+	if !providerutil.IsClusterSpecEqual(originalInfraCluster, infraCluster) {
+		log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
+		patchInfraCluster := client.MergeFrom(originalInfraCluster)
+		if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
+			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in GardenerShootCluster spec, skipping patch")
 	}
 
 	return nil
