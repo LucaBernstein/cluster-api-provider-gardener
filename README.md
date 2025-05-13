@@ -193,6 +193,14 @@ is manually re-applied afterwards.
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
+### Running E2E Tests Locally
+
+```bash
+make kind-gardener-up clusterctl-init
+
+make test-e2e
+```
+
 ## License
 
 Copyright 2025.

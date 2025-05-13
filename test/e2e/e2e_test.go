@@ -293,6 +293,7 @@ var _ = Describe("Manager", Ordered, func() {
 					Provider:         controlplanev1alpha1.ProviderGSCP{Type: "local"},
 					Kubernetes:       gardenercorev1beta1.Kubernetes{Version: "1.32"},
 					CloudProfile:     &gardenercorev1beta1.CloudProfileReference{Name: "local"},
+					Workerless:       true,
 				},
 			}
 
