@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	controllerRuntimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/kcp"
@@ -220,7 +220,7 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 	return nil
 }
 
-func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster cluster.Cluster) error {
+func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrastructurev1alpha1.GardenerShootCluster{}).
 		Named("gardenershootcluster").
