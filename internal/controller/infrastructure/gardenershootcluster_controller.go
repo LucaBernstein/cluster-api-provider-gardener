@@ -197,9 +197,9 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
 		log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
 		patchShoot := client.StrategicMergeFrom(originalShoot)
-		if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+		if err = r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
 			log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
-			return err
+			// Don't return error yet
 		}
 	} else {
 		log.Info("No changes detected in Shoot spec, skipping patch")
@@ -217,7 +217,7 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 		log.Info("No changes detected in GardenerShootCluster spec, skipping patch")
 	}
 
-	return nil
+	return err
 }
 
 func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
