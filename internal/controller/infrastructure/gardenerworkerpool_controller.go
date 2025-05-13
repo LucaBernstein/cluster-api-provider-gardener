@@ -24,7 +24,9 @@ import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -33,9 +35,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controllerRuntimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -49,6 +53,8 @@ type GardenerWorkerPoolReconciler struct {
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
 	IsKCP          bool
+
+	PrioritizeShoot bool
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenerworkerpools,verbs=get;list;watch;create;update;patch;delete
@@ -130,34 +136,41 @@ func (r *GardenerWorkerPoolReconciler) syncSpecs(ctx context.Context, workerPool
 	originalWorkerPool := workerPool.DeepCopy()
 
 	// Sync the specs between Shoot and GardenerWorkerPool
-	providerutil.SyncShootSpecFromWorkerPool(shoot, originalWorkerPool)
-	providerutil.SyncWorkerPoolFromShootSpec(originalShoot, workerPool)
+	if r.PrioritizeShoot {
+		providerutil.SyncWorkerPoolFromShootSpec(originalShoot, workerPool)
 
-	// Check if Shoot spec has changed before patching
-	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
-		log.Info("Syncing GardenerWorkerPool spec >>> Shoot spec")
-		patchShoot := client.StrategicMergeFrom(originalShoot)
-		if err = r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
-			log.Error(err, "Error while syncing GardenerWorkerPool to Gardener Shoot")
-			// Don't return error yet.
+		// Check if GardenerWorkerPool spec has changed before patching
+		if !providerutil.IsWorkerPoolSpecEqual(originalWorkerPool, workerPool) {
+			log.Info("Syncing GardenerWorkerPool spec <<< Shoot spec")
+			patchWorkerPool := client.MergeFrom(originalWorkerPool)
+			// patch, _ := patchWorkerPool.Data(workerPool)
+			// log.Info("Calculated patch for GardenerWorkerPool spec", "patch", string(patch))
+			if err := r.Client.Patch(ctx, workerPool, patchWorkerPool); err != nil {
+				log.Error(err, "Error while syncing Gardener Shoot to GardenerWorkerPool")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in GardenerWorkerPool spec, skipping patch")
 		}
 	} else {
-		log.Info("No changes detected in Shoot spec, skipping patch")
-	}
+		providerutil.SyncShootSpecFromWorkerPool(shoot, originalWorkerPool)
 
-	// Check if GardenerWorkerPool spec has changed before patching
-	if !providerutil.IsWorkerPoolSpecEqual(originalWorkerPool, workerPool) {
-		log.Info("Syncing GardenerWorkerPool spec <<< Shoot spec")
-		patchWorkerPool := client.MergeFrom(originalWorkerPool)
-		if err := r.Client.Patch(ctx, workerPool, patchWorkerPool); err != nil {
-			log.Error(err, "Error while syncing Gardener Shoot to GardenerWorkerPool")
-			return err
+		// Check if Shoot spec has changed before patching
+		if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
+			log.Info("Syncing GardenerWorkerPool spec >>> Shoot spec")
+			patchShoot := client.StrategicMergeFrom(originalShoot)
+			// patch, _ := patchShoot.Data(shoot)
+			// log.Info("Calculated patch for Shoot (GardenerWorkerPool) spec", "patch", string(patch))
+			if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+				log.Error(err, "Error while syncing GardenerWorkerPool to Gardener Shoot")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in Shoot spec, skipping patch")
 		}
-	} else {
-		log.Info("No changes detected in GardenerWorkerPool spec, skipping patch")
 	}
 
-	return err
+	return nil
 }
 
 func (r *GardenerWorkerPoolReconciler) reconcileDelete() (ctrl.Result, error) {
@@ -195,8 +208,14 @@ func (r *GardenerWorkerPoolReconciler) updateStatus(ctx context.Context, workerP
 	//  get the providerID and put it in the providerIDList
 
 	// Get the secret for the shoot cluster to get the nodes
-	secret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: cluster.Namespace, Name: fmt.Sprintf("%s-kubeconfig", cluster.Name)}, secret); err != nil {
+	secret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      fmt.Sprintf("%s-kubeconfig", cluster.Name),
+		},
+	}
+	log.Info("Retrieving Shoot Access Secret", "secret", client.ObjectKeyFromObject(secret))
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(secret), secret); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("Shoot Access Secret not found or already deleted")
 			return nil
@@ -235,8 +254,8 @@ func (r *GardenerWorkerPoolReconciler) updateStatus(ctx context.Context, workerP
 		}
 	}
 
-	// Update the spec
-	if err := r.Client.Update(ctx, workerPool); err != nil {
+	// Update the spec. DeepCopy to not override the set status from previous spec sync.
+	if err := r.Client.Update(ctx, workerPool.DeepCopy()); err != nil {
 		log.Error(err, "Failed to update GardenerWorkerPool provider IDs")
 		return err
 	}
@@ -254,7 +273,7 @@ func (r *GardenerWorkerPoolReconciler) updateStatus(ctx context.Context, workerP
 func (r *GardenerWorkerPoolReconciler) reconcile(ctx context.Context, workerPool *infrastructurev1alpha1.GardenerWorkerPool, cluster *clusterv1beta1.Cluster) (ctrl.Result, error) {
 	log := runtimelog.FromContext(ctx).WithValues("operation", "reconcile")
 	if err := r.syncSpecs(ctx, workerPool, cluster); err != nil {
-		log.Error(err, "Failed to sync GardenerShootCluster spec")
+		log.Error(err, "Failed to sync GardenerWorkerPool spec")
 		return ctrl.Result{}, err
 	}
 
@@ -268,16 +287,40 @@ func (r *GardenerWorkerPoolReconciler) reconcile(ctx context.Context, workerPool
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.GardenerWorkerPool{}).
-		Named("gardenerworkerpool").
-		WatchesRawSource(
-			source.Kind[client.Object](targetCluster.GetCache(),
-				&gardenercorev1beta1.Shoot{},
-				handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerWorkerPoolObject),
-			),
-		).
-		Complete(kcp.WithClusterInContext(r))
+	name := "gardenerworkerpool"
+	controller := ctrl.NewControllerManagedBy(mgr)
+	if r.PrioritizeShoot {
+		controller.
+			Named(name + "-prioritized-shoot").
+			WatchesRawSource(
+				source.Kind[client.Object](targetCluster.GetCache(),
+					&gardenercorev1beta1.Shoot{},
+					handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerWorkerPoolObject),
+					WorkerInfoChanged(),
+				),
+			)
+	} else {
+		controller.
+			Named(name).
+			For(&infrastructurev1alpha1.GardenerWorkerPool{})
+	}
+	return controller.Complete(kcp.WithClusterInContext(r))
+}
+
+func WorkerInfoChanged() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldShoot, ok := e.ObjectOld.(*gardenercorev1beta1.Shoot)
+			if !ok {
+				return false
+			}
+			newShoot, ok := e.ObjectNew.(*gardenercorev1beta1.Shoot)
+			if !ok {
+				return false
+			}
+			return !apiequality.Semantic.DeepEqual(oldShoot.Spec.Provider, newShoot.Spec.Provider)
+		},
+	}
 }
 
 func (r *GardenerWorkerPoolReconciler) MapShootToGardenerWorkerPoolObject(ctx context.Context, obj client.Object) []reconcile.Request {

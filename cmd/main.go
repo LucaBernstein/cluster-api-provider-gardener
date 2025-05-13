@@ -309,6 +309,16 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane")
 		os.Exit(1)
 	}
+	if err = (&controlplanecontroller.GardenerShootControlPlaneReconciler{
+		Client:          mgr.GetClient(),
+		GardenerClient:  gardenMgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		IsKCP:           isKcp,
+		PrioritizeShoot: true,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootControlPlane (prioritized Shoot)")
+		os.Exit(1)
+	}
 
 	if err = (&infrastructurecontroller.GardenerShootClusterReconciler{
 		Client:         mgr.GetClient(),
@@ -319,6 +329,17 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster")
 		os.Exit(1)
 	}
+	if err = (&infrastructurecontroller.GardenerShootClusterReconciler{
+		Client:          mgr.GetClient(),
+		GardenerClient:  gardenMgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		IsKCP:           isKcp,
+		PrioritizeShoot: true,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerShootCluster (prioritized Shoot)")
+		os.Exit(1)
+	}
+
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err = webhookcontrolplanev1alpha1.
@@ -337,6 +358,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	if err = (&infrastructurecontroller.GardenerWorkerPoolReconciler{
 		Client:         mgr.GetClient(),
 		GardenerClient: gardenMgr.GetClient(),
@@ -344,6 +366,16 @@ func main() {
 		IsKCP:          isKcp,
 	}).SetupWithManager(mgr, gardenMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GardenerWorkerPool")
+		os.Exit(1)
+	}
+	if err = (&infrastructurecontroller.GardenerWorkerPoolReconciler{
+		Client:          mgr.GetClient(),
+		GardenerClient:  gardenMgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		IsKCP:           isKcp,
+		PrioritizeShoot: true,
+	}).SetupWithManager(mgr, gardenMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GardenerWorkerPool (prioritized Shoot)")
 		os.Exit(1)
 	}
 	// nolint:goconst
@@ -354,6 +386,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

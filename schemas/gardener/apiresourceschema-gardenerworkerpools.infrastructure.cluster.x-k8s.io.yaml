@@ -524,6 +524,15 @@ spec:
               description: MachineControllerManagerSettings contains configurations
                 for different worker-pools. Eg. MachineDrainTimeout, MachineHealthTimeout.
               properties:
+                disableHealthTimeout:
+                  description: |-
+                    DisableHealthTimeout if set to true, health timeout will be ignored. Leading to machine never being declared failed.
+                    This is intended to be used only for in-place updates.
+                  type: boolean
+                inPlaceUpdateTimeout:
+                  description: MachineInPlaceUpdateTimeout is the timeout after which
+                    in-place update is declared failed.
+                  type: string
                 machineCreationTimeout:
                   description: MachineCreationTimeout is the period after which creation
                     of the machine is declared failed.
@@ -679,6 +688,11 @@ spec:
         status:
           description: GardenerWorkerPoolStatus defines the observed state of GardenerWorkerPool.
           properties:
+            observedShootGeneration:
+              description: ObservedShootGeneration is used to determine the leader
+                of a change to sync the specs.
+              format: int64
+              type: integer
             ready:
               description: Ready indicates whether the worker pool is ready.
               type: boolean

@@ -11,7 +11,9 @@ import (
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
@@ -120,11 +122,7 @@ func SyncGSCPSpecFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *contr
 
 func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
 	shoot.Spec.Hibernation = infraCluster.Spec.Hibernation
-	// Do not allow to nil the maintenance field as this will cause a potential eternal reconciliation loop,
-	// because the maintenance time window is defaulted to a random time window, which causes problems when syncing.
-	if infraCluster.Spec.Hibernation != nil {
-		shoot.Spec.Maintenance = infraCluster.Spec.Maintenance
-	}
+	shoot.Spec.Maintenance = infraCluster.Spec.Maintenance
 	shoot.Spec.Region = infraCluster.Spec.Region
 	shoot.Spec.SeedName = infraCluster.Spec.SeedName
 	shoot.Spec.SeedSelector = infraCluster.Spec.SeedSelector
@@ -132,14 +130,26 @@ func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, infraCluster *in
 
 func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
 	infraCluster.Spec.Hibernation = shoot.Spec.Hibernation
-	// Do not allow to nil the maintenance field as this will cause a potential eternal reconciliation loop,
-	// because the maintenance time window is defaulted to a random time window, which causes problems when syncing.
-	if shoot.Spec.Hibernation != nil {
-		infraCluster.Spec.Maintenance = shoot.Spec.Maintenance
-	}
+	infraCluster.Spec.Maintenance = shoot.Spec.Maintenance
 	infraCluster.Spec.Region = shoot.Spec.Region
 	infraCluster.Spec.SeedName = shoot.Spec.SeedName
 	infraCluster.Spec.SeedSelector = shoot.Spec.SeedSelector
+}
+
+func SpecChanged() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldShoot, ok := e.ObjectOld.(*gardenercorev1beta1.Shoot)
+			if !ok {
+				return false
+			}
+			newShoot, ok := e.ObjectNew.(*gardenercorev1beta1.Shoot)
+			if !ok {
+				return false
+			}
+			return !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec)
+		},
+	}
 }
 
 func SyncShootProviderFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
@@ -195,6 +205,7 @@ func SyncShootSpecFromWorkerPool(shoot *gardenercorev1beta1.Shoot, workerPool *i
 		workers[i] = *WorkerConfigFromWorkerPool(workerPool)
 	}
 }
+
 func SyncWorkerPoolFromShootSpec(shoot *gardenercorev1beta1.Shoot, workerPool *infrastructurev1alpha1.GardenerWorkerPool) {
 	workers := shoot.Spec.Provider.Workers
 	for _, worker := range workers {

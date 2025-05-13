@@ -7,6 +7,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -143,6 +144,7 @@ func ensureOwnerRef(ctx context.Context, c client.Client, obj metav1.Object, clu
 		Kind:       cluster.Kind,
 		Name:       cluster.Name,
 		UID:        cluster.UID,
+		Controller: ptr.To(true),
 	}
 
 	if util.HasExactOwnerRef(obj.GetOwnerReferences(), desiredOwnerRef) &&
