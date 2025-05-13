@@ -283,3 +283,7 @@ func IsShootSpecEqual(original, updated *gardenercorev1beta1.Shoot) bool {
 func IsClusterSpecEqual(original, updated *infrastructurev1alpha1.GardenerShootCluster) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }
+
+func IsControlPlaneSpecEqual(original, updated *controlplanev1alpha1.GardenerShootControlPlane) bool {
+	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
+}

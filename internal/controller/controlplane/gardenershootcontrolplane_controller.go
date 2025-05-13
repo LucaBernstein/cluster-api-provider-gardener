@@ -63,7 +63,7 @@ type GardenerShootControlPlaneReconciler struct {
 type ControlPlaneContext struct {
 	ctx context.Context
 
-	cluster           *v1beta1.Cluster
+	cluster           *clusterv1beta1.Cluster
 	shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane
 	shoot             *gardenercorev1beta1.Shoot
 	clusterName       string
@@ -141,7 +141,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 	log.Info("Adding finalizer to GardenerShootControlPlane")
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
 	// TODO(tobschli): This clashes with the finalizer that CAPI uses. Maybe we do not need a finalizer at all?
-	if controllerutil.AddFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+	if controllerutil.AddFinalizer(cpc.shootControlPlane, clusterv1beta1.ClusterFinalizer) {
 		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -268,7 +268,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 	}
 
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
-	if controllerutil.RemoveFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+	if controllerutil.RemoveFinalizer(cpc.shootControlPlane, clusterv1beta1.ClusterFinalizer) {
 		if err = r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -371,39 +371,46 @@ func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 				"cluster.x-k8s.io/cluster-name": cluster.Name,
 			},
 		},
-		Type: v1beta1.ClusterSecretType,
+		Type: clusterv1beta1.ClusterSecretType,
 	}
 }
 
 func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlPlaneContext) error {
 	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "syncSpecs")
-	var (
-		err error
 
-		originalShoot             = cpc.shoot.DeepCopy()
-		patchShoot                = client.StrategicMergeFrom(originalShoot.DeepCopy())
-		originalShootControlPlane = cpc.shootControlPlane.DeepCopy()
-		patchShootControlPlane    = client.MergeFrom(originalShootControlPlane.DeepCopy())
-	)
+	originalShoot := cpc.shoot.DeepCopy()
+	originalShootControlPlane := cpc.shootControlPlane.DeepCopy()
 
-	// Cross-patch Shoot and GardenerShootControlPlane objects.
+	// Sync the specs between Shoot and GardenerShootControlPlane
 	providerutil.SyncShootSpecFromGSCP(cpc.shoot, originalShootControlPlane)
 	providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
 
-	// patch the shoot cluster object from the GardenerShootControlPlane object.
-	log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
-	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
-	if err != nil {
-		log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
+	var err error
+	// Check if Shoot spec has changed before patching
+	if !providerutil.IsShootSpecEqual(originalShoot, cpc.shoot) {
+		log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
+		patchShoot := client.StrategicMergeFrom(originalShoot)
+		if err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot); err != nil {
+			log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
+			// Don't return error yet.
+		}
+	} else {
+		log.Info("No changes detected in Shoot spec, skipping patch")
 	}
 
-	// sync back the shoot state (also, if above sync failed).
-	log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
-	err1 := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane)
-	if err1 != nil {
-		log.Error(err1, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
+	// Check if GardenerShootControlPlane spec has changed before patching
+	if !providerutil.IsControlPlaneSpecEqual(originalShootControlPlane, cpc.shootControlPlane) {
+		log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
+		patchShootControlPlane := client.MergeFrom(originalShootControlPlane)
+		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane); err != nil {
+			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in GardenerShootControlPlane spec, skipping patch")
 	}
-	return err1
+
+	return err
 }
 
 func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneContext) error {
