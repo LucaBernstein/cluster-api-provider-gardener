@@ -63,7 +63,7 @@ kubectl apply -f schemas/binding.yaml
 
 **Apply `Cluster` resources in consuming workspace:**
 ```shell
-kubectl apply -f config/samples/workerfull.yaml
+kubectl apply -f config/samples/workerful.yaml
 ```
 
 ### Cluster-API
