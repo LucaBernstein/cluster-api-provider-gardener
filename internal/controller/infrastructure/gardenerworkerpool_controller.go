@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	controllerRuntimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -125,30 +125,39 @@ func (r *GardenerWorkerPoolReconciler) syncSpecs(ctx context.Context, workerPool
 		return nil
 	}
 
-	var (
-		originalShoot = shoot.DeepCopy()
-		patchShoot    = client.StrategicMergeFrom(originalShoot)
+	// Deep copy the original objects for patching
+	originalShoot := shoot.DeepCopy()
+	originalWorkerPool := workerPool.DeepCopy()
 
-		originalWorkerPool = workerPool.DeepCopy()
-		patchWorkerPool    = client.MergeFrom(originalWorkerPool)
-	)
-
+	// Sync the specs between Shoot and GardenerWorkerPool
 	providerutil.SyncShootSpecFromWorkerPool(shoot, originalWorkerPool)
 	providerutil.SyncWorkerPoolFromShootSpec(originalShoot, workerPool)
 
-	log.Info("Syncing GardenerWorkerPool spec >>> Shoot spec")
-	if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
-		log.Error(err, "Error while syncing GardenerWorkerPool to Gardener Shoot")
+	// Check if Shoot spec has changed before patching
+	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
+		log.Info("Syncing GardenerWorkerPool spec >>> Shoot spec")
+		patchShoot := client.StrategicMergeFrom(originalShoot)
+		if err = r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+			log.Error(err, "Error while syncing GardenerWorkerPool to Gardener Shoot")
+			// Don't return error yet.
+		}
+	} else {
+		log.Info("No changes detected in Shoot spec, skipping patch")
 	}
 
-	// sync back the shoot state (also, if above sync failed)
-	log.Info("Syncing GardenerWorkerPool spec <<< Shoot spec")
-	if err := r.Client.Patch(ctx, workerPool, patchWorkerPool); err != nil {
-		log.Error(err, "Error while syncing Gardener Shoot to GardenerWorkerPool")
-		return err
+	// Check if GardenerWorkerPool spec has changed before patching
+	if !providerutil.IsWorkerPoolSpecEqual(originalWorkerPool, workerPool) {
+		log.Info("Syncing GardenerWorkerPool spec <<< Shoot spec")
+		patchWorkerPool := client.MergeFrom(originalWorkerPool)
+		if err := r.Client.Patch(ctx, workerPool, patchWorkerPool); err != nil {
+			log.Error(err, "Error while syncing Gardener Shoot to GardenerWorkerPool")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in GardenerWorkerPool spec, skipping patch")
 	}
 
-	return nil
+	return err
 }
 
 func (r *GardenerWorkerPoolReconciler) reconcileDelete() (ctrl.Result, error) {
@@ -258,7 +267,7 @@ func (r *GardenerWorkerPoolReconciler) reconcile(ctx context.Context, workerPool
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster cluster.Cluster) error {
+func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrastructurev1alpha1.GardenerWorkerPool{}).
 		Named("gardenerworkerpool").

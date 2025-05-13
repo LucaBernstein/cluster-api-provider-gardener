@@ -2,7 +2,6 @@ package util
 
 import (
 	"context"
-
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -285,5 +284,9 @@ func IsClusterSpecEqual(original, updated *infrastructurev1alpha1.GardenerShootC
 }
 
 func IsControlPlaneSpecEqual(original, updated *controlplanev1alpha1.GardenerShootControlPlane) bool {
+	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
+}
+
+func IsWorkerPoolSpecEqual(original, updated *infrastructurev1alpha1.GardenerWorkerPool) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }
