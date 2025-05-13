@@ -21,6 +21,7 @@ rules:
   resources:
   - clusters
   - clusters/status
+  - machinepools
   verbs:
   - get
   - list
@@ -77,6 +78,7 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - gardenershootclusters
+  - gardenerworkerpools
   verbs:
   - create
   - delete
@@ -89,12 +91,14 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - gardenershootclusters/finalizers
+  - gardenerworkerpools/finalizers
   verbs:
   - update
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
   - gardenershootclusters/status
+  - gardenerworkerpools/status
   verbs:
   - get
   - patch

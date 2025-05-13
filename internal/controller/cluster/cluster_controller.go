@@ -39,11 +39,56 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	patch := client.MergeFrom(cluster.DeepCopy())
+	if controllerutil.AddFinalizer(&cluster, v1beta1.ClusterFinalizer) {
+		if err := r.Client.Patch(ctx, &cluster, patch); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Check if the cluster is being deleted
+	if !cluster.DeletionTimestamp.IsZero() {
+		log.Info("Cluster is being deleted")
+		// Check whether the gscp and gsc are still present
+		gscp := &controlplanev1alpha1.GardenerShootControlPlane{}
+		gscpErr := r.Client.Get(ctx, client.ObjectKey{
+			Name:      cluster.Spec.ControlPlaneRef.Name,
+			Namespace: cluster.Namespace,
+		}, gscp)
+		if gscpErr == nil {
+			if err := r.Client.Delete(ctx, gscp); err != nil {
+				log.Error(err, "unable to delete gscp")
+				return ctrl.Result{}, err
+			}
+		}
+
+		infraCluster := &infrastructurev1alpha1.GardenerShootCluster{}
+		infrErr := r.Client.Get(ctx, client.ObjectKey{
+			Name:      cluster.Spec.InfrastructureRef.Name,
+			Namespace: cluster.Namespace,
+		}, infraCluster)
+		if infrErr == nil {
+			if err := r.Client.Delete(ctx, infraCluster); err != nil {
+				log.Error(err, "unable to delete gsc")
+				return ctrl.Result{}, err
+			}
+		}
+
+		if apierrors.IsNotFound(gscpErr) && apierrors.IsNotFound(infrErr) {
+			log.Info("Cluster deletion complete")
+			controllerutil.RemoveFinalizer(&cluster, v1beta1.ClusterFinalizer)
+			if err := r.Client.Update(ctx, &cluster); err != nil {
+				log.Error(err, "unable to remove finalizer")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
 	// Mocking setting the Owner reference for GardenerShootControlPlanes
 	gscp := &controlplanev1alpha1.GardenerShootControlPlane{}
 	if err := r.Client.Get(ctx, client.ObjectKey{
 		Name:      cluster.Spec.ControlPlaneRef.Name,
-		Namespace: cluster.Spec.ControlPlaneRef.Namespace,
+		Namespace: cluster.Namespace,
 	}, gscp); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("could not find respective GSCP. Requeueing.")
@@ -52,11 +97,16 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	if err := ensureOwnerRef(ctx, r.Client, gscp, &cluster); err != nil {
+		log.Error(err, "unable to ensure OwnerRef on GSC")
+		return ctrl.Result{}, err
+	}
+
 	// Mocking setting the Owner reference for GardenerShootClusters
 	infraCluster := &infrastructurev1alpha1.GardenerShootCluster{}
 	if err := r.Client.Get(ctx, client.ObjectKey{
 		Name:      cluster.Spec.InfrastructureRef.Name,
-		Namespace: cluster.Spec.InfrastructureRef.Namespace,
+		Namespace: cluster.Namespace,
 	}, infraCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("could not find respective GSC. Requeueing.")

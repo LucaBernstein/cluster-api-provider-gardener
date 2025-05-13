@@ -28,3 +28,5 @@ go.work
 
 # kubeconfigs
 kubeconfig.yaml
+
+.DS_Store

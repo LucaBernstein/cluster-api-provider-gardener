@@ -1,6 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= localhost:5001/cluster-api-provider-gardener/controller:latest
-GARDENER_KUBECONFIG ?= ./bin/gardener/example/gardener-local/kind/local/kubeconfig
+GARDENER_KUBECONFIG ?= ./bin/gardener/example/provider-local/seed-kind/base/kubeconfig
 GARDENER_DIR ?= $(shell go list -m -f '{{.Dir}}' github.com/gardener/gardener)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -92,7 +92,7 @@ kind-gardener-up: gardener
 
 .PHONY: clusterctl-init
 clusterctl-init: clusterctl
-	KUBECONFIG=$(GARDENER_KUBECONFIG) $(CLUSTERCTL) init
+	KUBECONFIG=$(GARDENER_KUBECONFIG) EXP_MACHINE_POOL=true $(CLUSTERCTL) init
 
 .PHONY: format
 format: goimports goimports-reviser ## Format imports.
@@ -173,6 +173,12 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	$(eval B64_GARDENER_KUBECONFIG_ENV := $(shell ./hack/gardener-kubeconfig.sh $(GARDENER_KUBECONFIG)))
 	@cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	@$(KUSTOMIZE) build config/overlays/dev | B64_GARDENER_KUBECONFIG=$(B64_GARDENER_KUBECONFIG_ENV) envsubst | $(KUBECTL) apply -f -
+
+.PHONY: deploy-kcp
+deploy-kcp: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	$(eval B64_GARDENER_KUBECONFIG_ENV := $(shell ./hack/gardener-kubeconfig.sh $(GARDENER_KUBECONFIG)))
+	@cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	@$(KUSTOMIZE) build config/overlays/kcp | B64_GARDENER_KUBECONFIG=$(B64_GARDENER_KUBECONFIG_ENV) envsubst | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

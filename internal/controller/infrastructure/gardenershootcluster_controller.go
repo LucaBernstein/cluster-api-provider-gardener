@@ -16,14 +16,14 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	controllerRuntimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"
 )
@@ -77,7 +77,7 @@ func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl
 }
 
 func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster) (ctrl.Result, error) {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "delete")
+	log := runtimelog.FromContext(ctx).WithValues("operation", "delete")
 
 	patch := client.MergeFrom(infraCluster.DeepCopy())
 	if controllerutil.RemoveFinalizer(infraCluster, v1beta1.ClusterFinalizer) {
@@ -92,9 +92,11 @@ func (r *GardenerShootClusterReconciler) reconcileDelete(ctx context.Context, in
 }
 
 func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) (ctrl.Result, error) {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "reconcile")
+	log := runtimelog.FromContext(ctx).WithValues("operation", "reconcile")
 
+	log.Info("Adding finalizer to GardenerShootCluster")
 	patch := client.MergeFrom(infraCluster.DeepCopy())
+	// TODO(tobschli): This clashes with the finalizer that CAPI uses. Maybe we do not need a finalizer at all?
 	if controllerutil.AddFinalizer(infraCluster, v1beta1.ClusterFinalizer) {
 		if err := r.Client.Patch(ctx, infraCluster, patch); err != nil {
 			return ctrl.Result{}, err
@@ -115,9 +117,9 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context, infraClu
 }
 
 func (r *GardenerShootClusterReconciler) updateStatus(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) error {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "updateStatus")
+	log := runtimelog.FromContext(ctx).WithValues("operation", "updateStatus")
 
-	shoot, err := r.shootFromCluster(ctx, infraCluster, cluster)
+	shoot, err := providerutil.ShootFromCluster(ctx, r.GardenerClient, r.Client, cluster)
 	if err != nil {
 		log.Error(err, "Failed to get Shoot from Cluster")
 		return err
@@ -170,38 +172,10 @@ func (r *GardenerShootClusterReconciler) updateStatus(ctx context.Context, infra
 	return nil
 }
 
-func (r *GardenerShootClusterReconciler) shootFromCluster(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) (*gardenercorev1beta1.Shoot, error) {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "shootFromCluster")
-
-	if cluster.Spec.ControlPlaneRef == nil {
-		log.Info("ControlPlaneRef is nil, do nothing")
-		return nil, nil
-	}
-	controlPlane := &controlplanev1alpha1.GardenerShootControlPlane{}
-	if err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Spec.ControlPlaneRef.Namespace, Name: cluster.Spec.ControlPlaneRef.Name}, controlPlane); err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("ControlPlane not found")
-			return nil, nil
-		}
-		log.Error(err, "Failed to get ControlPlane")
-		return nil, err
-	}
-
-	shoot := &gardenercorev1beta1.Shoot{}
-	if err := r.GardenerClient.Get(ctx, providerutil.ShootNameFromCAPIResources(*cluster, *controlPlane), shoot); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return shoot, nil
-}
-
 func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraCluster *infrastructurev1alpha1.GardenerShootCluster, cluster *v1beta1.Cluster) error {
-	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", client.ObjectKeyFromObject(infraCluster), "operation", "syncSpecs")
+	log := runtimelog.FromContext(ctx).WithValues("operation", "syncSpecs")
 
-	shoot, err := r.shootFromCluster(ctx, infraCluster, cluster)
+	shoot, err := providerutil.ShootFromCluster(ctx, r.GardenerClient, r.Client, cluster)
 	if err != nil {
 		log.Error(err, "Failed to get Shoot from Cluster")
 		return err
@@ -211,34 +185,42 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 		return nil
 	}
 
-	var (
-		originalShoot = shoot.DeepCopy()
-		patchShoot    = client.StrategicMergeFrom(originalShoot)
+	// Deep copy the original objects for patching
+	originalShoot := shoot.DeepCopy()
+	originalInfraCluster := infraCluster.DeepCopy()
 
-		originalInfraCluster = infraCluster.DeepCopy()
-		patchInfraCluster    = client.MergeFrom(originalInfraCluster)
-	)
-
-	// Cross-patch Shoot and GardenerShootCluster objects.
+	// Sync the specs between Shoot and GardenerShootCluster
 	providerutil.SyncShootSpecFromCluster(shoot, originalInfraCluster)
 	providerutil.SyncClusterSpecFromShoot(originalShoot, infraCluster)
 
-	log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
-	if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
-		log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
+	// Check if Shoot spec has changed before patching
+	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
+		log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
+		patchShoot := client.StrategicMergeFrom(originalShoot)
+		if err = r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+			log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
+			// Don't return error yet
+		}
+	} else {
+		log.Info("No changes detected in Shoot spec, skipping patch")
 	}
 
-	// sync back the shoot state (also, if above sync failed)
-	log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
-	if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
-		log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
-		return err
+	// Check if GardenerShootCluster spec has changed before patching
+	if !providerutil.IsClusterSpecEqual(originalInfraCluster, infraCluster) {
+		log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
+		patchInfraCluster := client.MergeFrom(originalInfraCluster)
+		if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
+			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in GardenerShootCluster spec, skipping patch")
 	}
 
-	return nil
+	return err
 }
 
-func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster cluster.Cluster) error {
+func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrastructurev1alpha1.GardenerShootCluster{}).
 		Named("gardenershootcluster").
@@ -248,7 +230,7 @@ func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targ
 				handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerShootClusterObject),
 			),
 		).
-		Complete(r)
+		Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootClusterReconciler) MapShootToGardenerShootClusterObject(ctx context.Context, obj client.Object) []reconcile.Request {

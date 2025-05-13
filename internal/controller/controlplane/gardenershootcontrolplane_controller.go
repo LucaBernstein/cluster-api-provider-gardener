@@ -33,6 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/record"
@@ -62,7 +63,7 @@ type GardenerShootControlPlaneReconciler struct {
 type ControlPlaneContext struct {
 	ctx context.Context
 
-	cluster           *v1beta1.Cluster
+	cluster           *clusterv1beta1.Cluster
 	shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane
 	shoot             *gardenercorev1beta1.Shoot
 	clusterName       string
@@ -135,11 +136,12 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext) (ctrl.Result, error) {
-	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "reconcile")
+	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "reconcile")
 
 	log.Info("Adding finalizer to GardenerShootControlPlane")
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
-	if controllerutil.AddFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+	// TODO(tobschli): This clashes with the finalizer that CAPI uses. Maybe we do not need a finalizer at all?
+	if controllerutil.AddFinalizer(cpc.shootControlPlane, clusterv1beta1.ClusterFinalizer) {
 		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -197,23 +199,39 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 }
 
 func (r *GardenerShootControlPlaneReconciler) createShoot(cpc ControlPlaneContext) error {
-	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "createShoot")
+	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "createShoot")
 	infraCluster := &infrastructurev1alpha1.GardenerShootCluster{}
 	if err := r.Client.Get(cpc.ctx, types.NamespacedName{
 		Name:      cpc.cluster.Spec.InfrastructureRef.Name,
-		Namespace: cpc.cluster.Spec.InfrastructureRef.Namespace,
+		Namespace: cpc.cluster.Namespace,
 	}, infraCluster); err != nil {
 		log.Error(err, "Failed to get infrastructureCluster")
 		return err
 	}
+	isShootWorkerless := cpc.shootControlPlane.Spec.Workerless
 
-	shoot := providerutil.ShootFromCAPIResources(*cpc.cluster, *cpc.shootControlPlane, *infraCluster)
-	injectReferenceLabels(shoot, cpc.shootControlPlane, infraCluster, r.IsKCP, cpc.clusterName)
+	workers, err := r.getWorkerPoolsForCluster(cpc)
+	if err != nil {
+		log.Error(err, "Failed to get worker pools")
+		return err
+	}
+	if !isShootWorkerless && len(workers) == 0 {
+		// TODO(tobschli): Notify the user that no worker pools were found.
+		log.Info("No worker pools found")
+		// Return no error, as we want to wait for the user to create the worker pools
+		return nil
+	} else if isShootWorkerless {
+		// If the shoot is supposed to be workerless, we should dismiss all worker pools that might be configured.
+		workers = []infrastructurev1alpha1.GardenerWorkerPool{}
+	}
+
+	shoot := providerutil.ShootFromCAPIResources(*cpc.cluster, *cpc.shootControlPlane, *infraCluster, workers)
+	injectReferenceLabels(shoot, cpc.shootControlPlane, infraCluster, workers, r.IsKCP, cpc.clusterName)
 	return r.GardenerClient.Create(cpc.ctx, shoot)
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneContext) (ctrl.Result, error) {
-	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "delete")
+	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "delete")
 	log.Info("Reconciling Delete GardenerShootControlPlane")
 
 	err := r.Client.Delete(cpc.ctx, newEmptyShootAccessSecret(cpc.cluster))
@@ -250,7 +268,7 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 	}
 
 	patch := client.MergeFrom(cpc.shootControlPlane.DeepCopy())
-	if controllerutil.RemoveFinalizer(cpc.shootControlPlane, v1beta1.ClusterFinalizer) {
+	if controllerutil.RemoveFinalizer(cpc.shootControlPlane, clusterv1beta1.ClusterFinalizer) {
 		if err = r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patch); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -259,6 +277,41 @@ func (r *GardenerShootControlPlaneReconciler) reconcileDelete(cpc ControlPlaneCo
 	log.Info("Successfully reconciled deletion of GardenerShootControlPlane")
 	record.Event(cpc.shootControlPlane, "GardenerShootControlPlaneReconcile", "Reconciled")
 	return ctrl.Result{}, nil
+}
+
+func (r *GardenerShootControlPlaneReconciler) getWorkerPoolsForCluster(cpc ControlPlaneContext) ([]infrastructurev1alpha1.GardenerWorkerPool, error) {
+	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "getWorkerPoolsForCluster")
+	machinePools := &expclusterv1.MachinePoolList{}
+	workers := []infrastructurev1alpha1.GardenerWorkerPool{}
+	if err := r.Client.List(cpc.ctx, machinePools, client.InNamespace(cpc.cluster.Namespace)); err != nil {
+		log.Error(err, "Failed to list machine pools")
+		return nil, err
+	}
+
+	log.Info(fmt.Sprintf("MachinePools: %v", len(machinePools.Items)))
+
+	for _, machinePool := range machinePools.Items {
+		if machinePool.Spec.ClusterName != cpc.cluster.Name {
+			continue
+		}
+		if machinePool.Spec.Template.Spec.InfrastructureRef.GroupVersionKind() != infrastructurev1alpha1.GroupVersion.WithKind("GardenerWorkerPool") {
+			continue
+		}
+		workerRef := machinePool.Spec.Template.Spec.InfrastructureRef
+		workerPool := &infrastructurev1alpha1.GardenerWorkerPool{}
+		if err := r.Client.Get(cpc.ctx, client.ObjectKey{Name: workerRef.Name, Namespace: machinePool.Namespace}, workerPool); err != nil {
+			if apierrors.IsNotFound(err) {
+				// TODO(tobschli): Notify the user that the specified worker pool could not be found.
+				log.Info("WorkerPool not found")
+				continue
+			}
+			log.Error(err, "Failed to get worker pool")
+			return nil, err
+		}
+		workers = append(workers, *workerPool)
+	}
+	log.Info(fmt.Sprintf("Workers: %v", len(workers)))
+	return workers, nil
 }
 
 func (r *GardenerShootControlPlaneReconciler) reconcileShootControlPlaneEndpoint(cpc ControlPlaneContext) error {
@@ -318,39 +371,46 @@ func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
 				"cluster.x-k8s.io/cluster-name": cluster.Name,
 			},
 		},
-		Type: v1beta1.ClusterSecretType,
+		Type: clusterv1beta1.ClusterSecretType,
 	}
 }
 
 func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlPlaneContext) error {
-	log := runtimelog.FromContext(cpc.ctx).WithValues("gardenershootcontrolplane", client.ObjectKeyFromObject(cpc.shootControlPlane), "operation", "syncSpecs")
-	var (
-		err error
+	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "syncSpecs")
 
-		originalShoot             = cpc.shoot.DeepCopy()
-		patchShoot                = client.StrategicMergeFrom(originalShoot.DeepCopy())
-		originalShootControlPlane = cpc.shootControlPlane.DeepCopy()
-		patchShootControlPlane    = client.MergeFrom(originalShootControlPlane.DeepCopy())
-	)
+	originalShoot := cpc.shoot.DeepCopy()
+	originalShootControlPlane := cpc.shootControlPlane.DeepCopy()
 
-	// Cross-patch Shoot and GardenerShootControlPlane objects.
+	// Sync the specs between Shoot and GardenerShootControlPlane
 	providerutil.SyncShootSpecFromGSCP(cpc.shoot, originalShootControlPlane)
 	providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
 
-	// patch the shoot cluster object from the GardenerShootControlPlane object.
-	log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
-	err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot)
-	if err != nil {
-		log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
+	var err error
+	// Check if Shoot spec has changed before patching
+	if !providerutil.IsShootSpecEqual(originalShoot, cpc.shoot) {
+		log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
+		patchShoot := client.StrategicMergeFrom(originalShoot)
+		if err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot); err != nil {
+			log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
+			// Don't return error yet.
+		}
+	} else {
+		log.Info("No changes detected in Shoot spec, skipping patch")
 	}
 
-	// sync back the shoot state (also, if above sync failed).
-	log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
-	err1 := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane)
-	if err1 != nil {
-		log.Error(err1, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
+	// Check if GardenerShootControlPlane spec has changed before patching
+	if !providerutil.IsControlPlaneSpecEqual(originalShootControlPlane, cpc.shootControlPlane) {
+		log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
+		patchShootControlPlane := client.MergeFrom(originalShootControlPlane)
+		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane); err != nil {
+			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
+			return err
+		}
+	} else {
+		log.Info("No changes detected in GardenerShootControlPlane spec, skipping patch")
 	}
-	return err1
+
+	return err
 }
 
 func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneContext) error {
@@ -378,7 +438,14 @@ func controlPlaneReady(shootStatus gardenercorev1beta1.ShootStatus) bool {
 	return false
 }
 
-func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane, infraCluster *infrastructurev1alpha1.GardenerShootCluster, isKCP bool, kcpClusterName string) {
+func injectReferenceLabels(
+	shoot *gardenercorev1beta1.Shoot,
+	shootControlPlane *controlplanev1alpha1.GardenerShootControlPlane,
+	infraCluster *infrastructurev1alpha1.GardenerShootCluster,
+	workerPools []infrastructurev1alpha1.GardenerWorkerPool,
+	isKCP bool,
+	kcpClusterName string,
+) {
 	labels := map[string]string{
 		controlplanev1alpha1.GSCPReferenceNameKey:      shootControlPlane.Name,
 		controlplanev1alpha1.GSCPReferenceNamespaceKey: shootControlPlane.Namespace,
@@ -387,9 +454,14 @@ func injectReferenceLabels(shoot *gardenercorev1beta1.Shoot, shootControlPlane *
 		infrastructurev1alpha1.GSCReferenceNamespaceKey: infraCluster.Namespace,
 	}
 	if isKCP {
-		labels[controlplanev1alpha1.GSCPReferecenceClusterNameKey] = kcpClusterName
-
+		labels[controlplanev1alpha1.GSCPReferenceClusterNameKey] = kcpClusterName
 		labels[infrastructurev1alpha1.GSCReferecenceClusterNameKey] = kcpClusterName
+		labels[infrastructurev1alpha1.GSWReferenceClusterNameKey] = kcpClusterName
+	}
+
+	for _, workerPool := range workerPools {
+		labels[infrastructurev1alpha1.GSWReferenceNamePrefix+workerPool.Name] = infrastructurev1alpha1.GSWTrue
+		labels[infrastructurev1alpha1.GSWReferenceNamespaceKey] = workerPool.Namespace
 	}
 
 	if shoot.Labels == nil {
@@ -438,7 +510,7 @@ func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx c
 		log.Info("Could not find gscp name on label")
 	}
 	if r.IsKCP {
-		clusterName, ok = shoot.GetLabels()[controlplanev1alpha1.GSCPReferecenceClusterNameKey]
+		clusterName, ok = shoot.GetLabels()[controlplanev1alpha1.GSCPReferenceClusterNameKey]
 		if !ok {
 			log.Info("Could not find gscp cluster on label")
 		}

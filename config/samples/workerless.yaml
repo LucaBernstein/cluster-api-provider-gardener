@@ -33,6 +33,7 @@ metadata:
 spec:
   # Defaulted to this objects namespace if not provided.
   projectNamespace: garden-local
+  workerless: true
 
   cloudProfile:
     kind: CloudProfile

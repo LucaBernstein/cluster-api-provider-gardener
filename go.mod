@@ -6,7 +6,6 @@ replace sigs.k8s.io/controller-runtime => github.com/kcp-dev/controller-runtime 
 
 require (
 	github.com/gardener/gardener v1.114.0
-	github.com/go-logr/logr v1.4.2
 	github.com/kcp-dev/kcp/sdk v0.27.1
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
@@ -44,6 +43,7 @@ require (
 	github.com/gardener/cert-management v0.17.5 // indirect
 	github.com/gardener/etcd-druid v0.27.0 // indirect
 	github.com/gardener/machine-controller-manager v0.56.1 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/errors v0.22.0 // indirect

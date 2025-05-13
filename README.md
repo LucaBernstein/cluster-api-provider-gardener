@@ -48,7 +48,7 @@ kubectl apply -f schemas/binding.yaml
 
 **Run controller:**
 ```shell
-go run cmd/main.go --kubeconfig <path/to/kcp-kubeconfig> --gardener-kubeconfig  <path/to/gardener/kubeconfig.yaml>
+ENABLE_WEBHOOKS=false go run cmd/main.go --kubeconfig <path/to/kcp-kubeconfig> -gardener-kubeconfig  <path/to/gardener/kubeconfig.yaml>
 ```
 
 **Create and enter consuming workspace:**
@@ -61,14 +61,23 @@ kubectl create workspace test --enter
 kubectl apply -f schemas/binding.yaml
 ```
 
-**Apply `Cluster` and `GardenerShootControlPlane` in consuming workspace:**
+**Apply `Cluster` resources in consuming workspace:**
 ```shell
-kubectl apply -f config/samples/controlplane_v1alpha1_gardenershootcontrolplane.yaml
+kubectl apply -f config/samples/workerful.yaml
 ```
 
 ### Cluster-API
 
 The local-setup assumes, that you deploy Cluster-API next to the virtual Garden-Cluster, which is _not_ intended for production.
+
+#### Prerequisites
+
+You will need a Cluster-API management cluster, with the `EXP_MACHINE_POOL` feature gate enabled.
+You can use the following command to create a management cluster with the `EXP_MACHINE_POOL` feature gate enabled:
+
+```sh
+EXP_MACHINE_POOL=true clusterctl init
+```
 
 #### To Deploy on the cluster
 
@@ -183,6 +192,14 @@ is manually re-applied afterwards.
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+### Running E2E Tests Locally
+
+```bash
+make kind-gardener-up clusterctl-init
+
+make test-e2e
+```
 
 ## License
 
