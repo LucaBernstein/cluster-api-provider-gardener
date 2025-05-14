@@ -64,7 +64,7 @@ spec:
           - --leader-elect
           - --health-probe-bind-address=:8081
           - --gardener-kubeconfig=/etc/gardener-kubeconfig/kubeconfig
-        image: localhost:5001/cluster-api-provider-gardener/controller:latest
+        image: controller
         name: manager
         ports: []
         securityContext:
