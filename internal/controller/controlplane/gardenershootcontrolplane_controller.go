@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	gardenerauthenticationv1alpha1 "github.com/gardener/gardener/pkg/apis/authentication/v1alpha1"
@@ -50,6 +51,10 @@ import (
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"
+)
+
+const (
+	KubeConfigValiditySeconds = 6000
 )
 
 // GardenerShootControlPlaneReconciler reconciles a GardenerShootControlPlane object
@@ -348,18 +353,45 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 		}
 	}
 
+	validityTimestamp, err := getValidityFromSecretData(secret.Data)
+	if err != nil {
+		return fmt.Errorf("could not get validity from secret data: %w", err)
+	}
+
+	if time.Now().Add(5 * time.Minute).Before(validityTimestamp) {
+		// The kubeconfig is still valid, no need to update it.
+		return nil
+	}
+
 	adminKubeconfigRequest := &gardenerauthenticationv1alpha1.AdminKubeconfigRequest{
 		Spec: gardenerauthenticationv1alpha1.AdminKubeconfigRequestSpec{
-			ExpirationSeconds: ptr.To(int64(6000)),
+			ExpirationSeconds: ptr.To(int64(KubeConfigValiditySeconds)),
 		},
 	}
 	if err := r.GardenerClient.SubResource("adminkubeconfig").Create(cpc.ctx, cpc.shoot, adminKubeconfigRequest); err != nil {
 		return err
 	}
 
-	secret.Data = map[string][]byte{"value": adminKubeconfigRequest.Status.Kubeconfig}
+	secret.Data = map[string][]byte{
+		"value":    adminKubeconfigRequest.Status.Kubeconfig,
+		"validity": []byte(strconv.FormatInt(time.Now().Add(KubeConfigValiditySeconds*time.Second).Unix(), 10)),
+	}
 
 	return r.Client.Update(cpc.ctx, secret)
+}
+
+func getValidityFromSecretData(data map[string][]byte) (time.Time, error) {
+	validity, ok := data["validity"]
+	if !ok {
+		// Return a timestamp that triggers a new request.
+		return time.Now(), nil
+	}
+	intVal, err := strconv.Atoi(string(validity))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("could not convert validity to int: %w", err)
+	}
+	validityTimeStamp := time.Unix(int64(intVal), 0)
+	return validityTimeStamp, nil
 }
 
 func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
