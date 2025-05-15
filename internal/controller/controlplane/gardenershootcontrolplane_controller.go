@@ -353,12 +353,11 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 		}
 	}
 
-	validityTimestamp, err := getValidityFromSecretData(secret.Data)
+	valid, err := isKubeConfigValid(secret.Data)
 	if err != nil {
 		return fmt.Errorf("could not get validity from secret data: %w", err)
 	}
-
-	if time.Now().Add(5 * time.Minute).Before(validityTimestamp) {
+	if valid {
 		// The kubeconfig is still valid, no need to update it.
 		return nil
 	}
@@ -380,18 +379,18 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 	return r.Client.Update(cpc.ctx, secret)
 }
 
-func getValidityFromSecretData(data map[string][]byte) (time.Time, error) {
+func isKubeConfigValid(data map[string][]byte) (bool, error) {
 	validity, ok := data["validity"]
 	if !ok {
 		// Return a timestamp that triggers a new request.
-		return time.Now(), nil
+		return false, nil
 	}
 	intVal, err := strconv.Atoi(string(validity))
 	if err != nil {
-		return time.Time{}, fmt.Errorf("could not convert validity to int: %w", err)
+		return false, fmt.Errorf("could not convert validity to int: %w", err)
 	}
 	validityTimeStamp := time.Unix(int64(intVal), 0)
-	return validityTimeStamp, nil
+	return time.Now().Add(5 * time.Minute).Before(validityTimeStamp), nil
 }
 
 func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
