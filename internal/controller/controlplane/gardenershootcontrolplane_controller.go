@@ -382,7 +382,6 @@ func (r *GardenerShootControlPlaneReconciler) reconcileShootAccess(cpc ControlPl
 func isKubeConfigValid(data map[string][]byte) (bool, error) {
 	validity, ok := data["validity"]
 	if !ok {
-		// Return a timestamp that triggers a new request.
 		return false, nil
 	}
 	intVal, err := strconv.Atoi(string(validity))
