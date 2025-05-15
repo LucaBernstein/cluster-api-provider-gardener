@@ -26,6 +26,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/utils/gardener"
 	v1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,6 +59,8 @@ type GardenerShootControlPlaneReconciler struct {
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
 	IsKCP          bool
+
+	PrioritizeShoot bool
 }
 
 type ControlPlaneContext struct {
@@ -381,39 +384,45 @@ func (r *GardenerShootControlPlaneReconciler) syncControlPlaneSpecs(cpc ControlP
 	originalShoot := cpc.shoot.DeepCopy()
 	originalShootControlPlane := cpc.shootControlPlane.DeepCopy()
 
-	// Sync the specs between Shoot and GardenerShootControlPlane
-	providerutil.SyncShootSpecFromGSCP(cpc.shoot, originalShootControlPlane)
-	providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
+	if r.PrioritizeShoot {
+		providerutil.SyncGSCPSpecFromShoot(originalShoot, cpc.shootControlPlane)
 
-	var err error
-	// Check if Shoot spec has changed before patching
-	if !providerutil.IsShootSpecEqual(originalShoot, cpc.shoot) {
-		log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
-		patchShoot := client.StrategicMergeFrom(originalShoot)
-		if err = r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot); err != nil {
-			log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
-			// Don't return error yet.
+		// Check if GardenerShootControlPlane spec has changed before patching
+		if !providerutil.IsControlPlaneSpecEqual(originalShootControlPlane, cpc.shootControlPlane) {
+			log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
+			patchShootControlPlane := client.MergeFrom(originalShootControlPlane)
+			// patch, _ := patchShootControlPlane.Data(cpc.shootControlPlane)
+			// log.Info("Calculated patch for GardenerShootControlPlane spec", "patch", string(patch))
+			if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane); err != nil {
+				log.Error(err, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in GardenerShootControlPlane spec, skipping patch")
 		}
 	} else {
-		log.Info("No changes detected in Shoot spec, skipping patch")
-	}
+		providerutil.SyncShootSpecFromGSCP(cpc.shoot, originalShootControlPlane)
 
-	// Check if GardenerShootControlPlane spec has changed before patching
-	if !providerutil.IsControlPlaneSpecEqual(originalShootControlPlane, cpc.shootControlPlane) {
-		log.Info("Syncing GardenerShootControlPlane spec <<< Shoot spec")
-		patchShootControlPlane := client.MergeFrom(originalShootControlPlane)
-		if err := r.Client.Patch(cpc.ctx, cpc.shootControlPlane, patchShootControlPlane); err != nil {
-			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootControlPlane")
-			return err
+		// Check if Shoot spec has changed before patching
+		if !providerutil.IsShootSpecEqual(originalShoot, cpc.shoot) {
+			log.Info("Syncing GardenerShootControlPlane spec >>> Shoot spec")
+			patchShoot := client.StrategicMergeFrom(originalShoot)
+			// patch, _ := patchShoot.Data(cpc.shoot)
+			// log.Info("Calculated patch for Shoot spec", "patch", string(patch))
+			if err := r.GardenerClient.Patch(cpc.ctx, cpc.shoot, patchShoot); err != nil {
+				log.Error(err, "Error while syncing GardenerShootControlPlane to Gardener Shoot")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in Shoot spec, skipping patch")
 		}
-	} else {
-		log.Info("No changes detected in GardenerShootControlPlane spec, skipping patch")
 	}
 
-	return err
+	return nil
 }
 
 func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneContext) error {
+	formerShootStatus := cpc.shootControlPlane.Status.DeepCopy()
 	if cpc.shoot != nil {
 		shootStatus := gardener.ComputeShootStatus(cpc.shoot.Status.LastOperation, cpc.shoot.Status.LastErrors, cpc.shoot.Status.Conditions...)
 		// TODO(LucaBernstein): Adapt readiness check to assert shoot component conditions.
@@ -422,6 +431,9 @@ func (r *GardenerShootControlPlaneReconciler) updateStatus(cpc ControlPlaneConte
 			cpc.shootControlPlane.Status.Initialized = controlPlaneReady(cpc.shoot.Status)
 		}
 		cpc.shootControlPlane.Status.ShootStatus = cpc.shoot.Status
+	}
+	if apiequality.Semantic.DeepEqual(cpc.shootControlPlane.Status, formerShootStatus) {
+		return nil
 	}
 	return r.Client.Status().Update(cpc.ctx, cpc.shootControlPlane)
 }
@@ -475,16 +487,24 @@ func injectReferenceLabels(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster cluster.Cluster) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&controlplanev1alpha1.GardenerShootControlPlane{}).
-		Named("gardenershootcontrolplane").
-		WatchesRawSource(
-			source.Kind[client.Object](targetCluster.GetCache(),
-				&gardenercorev1beta1.Shoot{},
-				handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
-			),
-		).
-		Complete(kcp.WithClusterInContext(r))
+	name := "gardenershootcontrolplane"
+	controller := ctrl.NewControllerManagedBy(mgr)
+	if r.PrioritizeShoot {
+		controller.
+			Named(name + "-prioritized-shoot").
+			WatchesRawSource(
+				source.Kind[client.Object](targetCluster.GetCache(),
+					&gardenercorev1beta1.Shoot{},
+					handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
+					providerutil.SpecChanged(),
+				),
+			)
+	} else {
+		controller.
+			Named(name).
+			For(&controlplanev1alpha1.GardenerShootControlPlane{})
+	}
+	return controller.Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx context.Context, obj client.Object) []reconcile.Request {

@@ -1,3 +1,19 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package infrastructure
 
 import (
@@ -33,6 +49,8 @@ type GardenerShootClusterReconciler struct {
 	GardenerClient client.Client
 	Scheme         *runtime.Scheme
 	IsKCP          bool
+
+	PrioritizeShoot bool
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters,verbs=get;list;watch;create;update;patch;delete
@@ -189,48 +207,62 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 	originalShoot := shoot.DeepCopy()
 	originalInfraCluster := infraCluster.DeepCopy()
 
-	// Sync the specs between Shoot and GardenerShootCluster
-	providerutil.SyncShootSpecFromCluster(shoot, originalInfraCluster)
-	providerutil.SyncClusterSpecFromShoot(originalShoot, infraCluster)
+	if r.PrioritizeShoot {
+		providerutil.SyncClusterSpecFromShoot(originalShoot, infraCluster)
 
-	// Check if Shoot spec has changed before patching
-	if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
-		log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
-		patchShoot := client.StrategicMergeFrom(originalShoot)
-		if err = r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
-			log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
-			// Don't return error yet
+		// Check if GardenerShootCluster spec has changed before patching
+		if !providerutil.IsClusterSpecEqual(originalInfraCluster, infraCluster) {
+			log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
+			patchInfraCluster := client.MergeFrom(originalInfraCluster)
+			// patch, _ := patchInfraCluster.Data(infraCluster)
+			// log.Info("Calculated patch for GSC (infraCluster) spec", "patch", string(patch))
+			if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
+				log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in GardenerShootCluster spec, skipping patch")
 		}
 	} else {
-		log.Info("No changes detected in Shoot spec, skipping patch")
-	}
+		providerutil.SyncShootSpecFromCluster(shoot, originalInfraCluster)
 
-	// Check if GardenerShootCluster spec has changed before patching
-	if !providerutil.IsClusterSpecEqual(originalInfraCluster, infraCluster) {
-		log.Info("Syncing GardenerShootCluster spec <<< Shoot spec")
-		patchInfraCluster := client.MergeFrom(originalInfraCluster)
-		if err := r.Client.Patch(ctx, infraCluster, patchInfraCluster); err != nil {
-			log.Error(err, "Error while syncing Gardener Shoot to GardenerShootCluster")
-			return err
+		// Check if Shoot spec has changed before patching
+		if !providerutil.IsShootSpecEqual(originalShoot, shoot) {
+			log.Info("Syncing GardenerShootCluster spec >>> Shoot spec")
+			patchShoot := client.StrategicMergeFrom(originalShoot)
+			// patch, _ := patchShoot.Data(shoot)
+			// log.Info("Calculated patch for GSC (Shoot) spec", "patch", string(patch))
+			if err := r.GardenerClient.Patch(ctx, shoot, patchShoot); err != nil {
+				log.Error(err, "Error while syncing GardenerShootCluster to Gardener Shoot")
+				return err
+			}
+		} else {
+			log.Info("No changes detected in Shoot spec, skipping patch")
 		}
-	} else {
-		log.Info("No changes detected in GardenerShootCluster spec, skipping patch")
 	}
 
-	return err
+	return nil
 }
 
 func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.GardenerShootCluster{}).
-		Named("gardenershootcluster").
-		WatchesRawSource(
-			source.Kind[client.Object](targetCluster.GetCache(),
-				&gardenercorev1beta1.Shoot{},
-				handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerShootClusterObject),
-			),
-		).
-		Complete(kcp.WithClusterInContext(r))
+	name := "gardenershootcluster"
+	controller := ctrl.NewControllerManagedBy(mgr)
+	if r.PrioritizeShoot {
+		controller.
+			Named(name + "-prioritized-shoot").
+			WatchesRawSource(
+				source.Kind[client.Object](targetCluster.GetCache(),
+					&gardenercorev1beta1.Shoot{},
+					handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerShootClusterObject),
+					providerutil.SpecChanged(),
+				),
+			)
+	} else {
+		controller.
+			Named(name).
+			For(&infrastructurev1alpha1.GardenerShootCluster{})
+	}
+	return controller.Complete(kcp.WithClusterInContext(r))
 }
 
 func (r *GardenerShootClusterReconciler) MapShootToGardenerShootClusterObject(ctx context.Context, obj client.Object) []reconcile.Request {
