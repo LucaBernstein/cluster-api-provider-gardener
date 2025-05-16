@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -143,6 +144,8 @@ func (r *GardenerShootControlPlaneReconciler) Reconcile(ctx context.Context, req
 	return r.reconcile(cpc)
 }
 
+var errIncompleteSpecifications = fmt.Errorf("incomplete specifications")
+
 func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext) (ctrl.Result, error) {
 	log := runtimelog.FromContext(cpc.ctx).WithValues("operation", "reconcile")
 
@@ -162,6 +165,9 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		}
 		log.Info("Shoot not found, creating it")
 		if err := r.createShoot(cpc); err != nil {
+			if errors.Is(err, errIncompleteSpecifications) {
+				return ctrl.Result{Requeue: true}, nil
+			}
 			log.Error(err, "Failed to create shoot")
 			return ctrl.Result{}, err
 		}
@@ -227,9 +233,10 @@ func (r *GardenerShootControlPlaneReconciler) createShoot(cpc ControlPlaneContex
 	}
 	if !isShootWorkerless && len(workers) == 0 {
 		// TODO(tobschli): Notify the user that no worker pools were found.
+		err := fmt.Errorf("no worker pools found: %w", errIncompleteSpecifications)
 		log.Info("No worker pools found")
 		// Return no error, as we want to wait for the user to create the worker pools
-		return nil
+		return err
 	} else if isShootWorkerless {
 		// If the shoot is supposed to be workerless, we should dismiss all worker pools that might be configured.
 		workers = []infrastructurev1alpha1.GardenerWorkerPool{}
