@@ -257,7 +257,6 @@ func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targ
 				source.Kind[client.Object](targetCluster.GetCache(),
 					&gardenercorev1beta1.Shoot{},
 					handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerShootClusterObject),
-					providerutil.SpecChanged(),
 				),
 			)
 	} else {

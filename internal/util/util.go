@@ -11,9 +11,7 @@ import (
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	controlplanev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/controlplane/v1alpha1"
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
@@ -134,22 +132,6 @@ func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, infraCluster *in
 	infraCluster.Spec.Region = shoot.Spec.Region
 	infraCluster.Spec.SeedName = shoot.Spec.SeedName
 	infraCluster.Spec.SeedSelector = shoot.Spec.SeedSelector
-}
-
-func SpecChanged() predicate.Predicate {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldShoot, ok := e.ObjectOld.(*gardenercorev1beta1.Shoot)
-			if !ok {
-				return false
-			}
-			newShoot, ok := e.ObjectNew.(*gardenercorev1beta1.Shoot)
-			if !ok {
-				return false
-			}
-			return !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec)
-		},
-	}
 }
 
 func SyncShootProviderFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {

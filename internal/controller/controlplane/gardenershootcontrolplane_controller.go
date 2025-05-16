@@ -528,7 +528,6 @@ func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager,
 				source.Kind[client.Object](targetCluster.GetCache(),
 					&gardenercorev1beta1.Shoot{},
 					handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
-					providerutil.SpecChanged(),
 				),
 			)
 	} else {
