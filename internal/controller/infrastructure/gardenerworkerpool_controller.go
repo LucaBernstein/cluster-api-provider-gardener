@@ -24,7 +24,6 @@ import (
 	gardenercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,11 +34,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controllerRuntimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/kcp"
 	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -254,8 +251,7 @@ func (r *GardenerWorkerPoolReconciler) updateStatus(ctx context.Context, workerP
 		}
 	}
 
-	// Update the spec. DeepCopy to not override the set status from previous spec sync.
-	if err := r.Client.Update(ctx, workerPool.DeepCopy()); err != nil {
+	if err := r.Client.Update(ctx, workerPool); err != nil {
 		log.Error(err, "Failed to update GardenerWorkerPool provider IDs")
 		return err
 	}
@@ -277,9 +273,11 @@ func (r *GardenerWorkerPoolReconciler) reconcile(ctx context.Context, workerPool
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, workerPool, cluster); err != nil {
-		log.Error(err, "Failed to update GardenerWorkerPool status")
-		return ctrl.Result{}, err
+	if r.PrioritizeShoot {
+		if err := r.updateStatus(ctx, workerPool, cluster); err != nil {
+			log.Error(err, "Failed to update GardenerWorkerPool status")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -296,7 +294,6 @@ func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, target
 				source.Kind[client.Object](targetCluster.GetCache(),
 					&gardenercorev1beta1.Shoot{},
 					handler.EnqueueRequestsFromMapFunc(r.MapShootToGardenerWorkerPoolObject),
-					WorkerInfoChanged(),
 				),
 			)
 	} else {
@@ -305,22 +302,6 @@ func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, target
 			For(&infrastructurev1alpha1.GardenerWorkerPool{})
 	}
 	return controller.Complete(kcp.WithClusterInContext(r))
-}
-
-func WorkerInfoChanged() predicate.Predicate {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldShoot, ok := e.ObjectOld.(*gardenercorev1beta1.Shoot)
-			if !ok {
-				return false
-			}
-			newShoot, ok := e.ObjectNew.(*gardenercorev1beta1.Shoot)
-			if !ok {
-				return false
-			}
-			return !apiequality.Semantic.DeepEqual(oldShoot.Spec.Provider, newShoot.Spec.Provider)
-		},
-	}
 }
 
 func (r *GardenerWorkerPoolReconciler) MapShootToGardenerWorkerPoolObject(ctx context.Context, obj client.Object) []reconcile.Request {

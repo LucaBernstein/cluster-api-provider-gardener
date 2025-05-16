@@ -169,9 +169,11 @@ func (r *GardenerShootControlPlaneReconciler) reconcile(cpc ControlPlaneContext)
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.updateStatus(cpc); err != nil {
-		log.Error(err, "failed to update status")
-		return ctrl.Result{}, err
+	if r.PrioritizeShoot {
+		if err := r.updateStatus(cpc); err != nil {
+			log.Error(err, "failed to update status")
+			return ctrl.Result{}, err
+		}
 	}
 
 	if err := r.syncControlPlaneSpecs(cpc); err != nil {
@@ -526,7 +528,6 @@ func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager,
 				source.Kind[client.Object](targetCluster.GetCache(),
 					&gardenercorev1beta1.Shoot{},
 					handler.EnqueueRequestsFromMapFunc(r.MapShootToControlPlaneObject),
-					providerutil.SpecChanged(),
 				),
 			)
 	} else {

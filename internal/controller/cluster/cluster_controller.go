@@ -50,6 +50,13 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Check if the cluster is being deleted
 	if !cluster.DeletionTimestamp.IsZero() {
 		log.Info("Cluster is being deleted")
+		if cluster.Status.Phase != string(v1beta1.ClusterPhaseDeleting) {
+			cluster.Status.Phase = string(v1beta1.ClusterPhaseDeleting)
+			if err := r.Client.Status().Update(ctx, &cluster); err != nil {
+				log.Error(err, "unable to update cluster status")
+				return ctrl.Result{}, err
+			}
+		}
 		// Check whether the gscp and gsc are still present
 		gscp := &controlplanev1alpha1.GardenerShootControlPlane{}
 		gscpErr := r.Client.Get(ctx, client.ObjectKey{
