@@ -688,11 +688,6 @@ spec:
         status:
           description: GardenerWorkerPoolStatus defines the observed state of GardenerWorkerPool.
           properties:
-            observedShootGeneration:
-              description: ObservedShootGeneration is used to determine the leader
-                of a change to sync the specs.
-              format: int64
-              type: integer
             ready:
               description: Ready indicates whether the worker pool is ready.
               type: boolean

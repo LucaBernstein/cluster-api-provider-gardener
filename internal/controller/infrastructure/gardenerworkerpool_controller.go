@@ -254,8 +254,7 @@ func (r *GardenerWorkerPoolReconciler) updateStatus(ctx context.Context, workerP
 		}
 	}
 
-	// Update the spec. DeepCopy to not override the set status from previous spec sync.
-	if err := r.Client.Update(ctx, workerPool.DeepCopy()); err != nil {
+	if err := r.Client.Update(ctx, workerPool); err != nil {
 		log.Error(err, "Failed to update GardenerWorkerPool provider IDs")
 		return err
 	}
