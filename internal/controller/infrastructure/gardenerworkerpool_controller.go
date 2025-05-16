@@ -276,9 +276,11 @@ func (r *GardenerWorkerPoolReconciler) reconcile(ctx context.Context, workerPool
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, workerPool, cluster); err != nil {
-		log.Error(err, "Failed to update GardenerWorkerPool status")
-		return ctrl.Result{}, err
+	if r.PrioritizeShoot {
+		if err := r.updateStatus(ctx, workerPool, cluster); err != nil {
+			log.Error(err, "Failed to update GardenerWorkerPool status")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil

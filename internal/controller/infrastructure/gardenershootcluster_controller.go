@@ -126,10 +126,13 @@ func (r *GardenerShootClusterReconciler) reconcile(ctx context.Context, infraClu
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, infraCluster, cluster); err != nil {
-		log.Error(err, "Failed to update GardenerShootCluster status")
-		return ctrl.Result{}, err
+	if r.PrioritizeShoot {
+		if err := r.updateStatus(ctx, infraCluster, cluster); err != nil {
+			log.Error(err, "Failed to update GardenerShootCluster status")
+			return ctrl.Result{}, err
+		}
 	}
+
 	log.Info("GardenerShootCluster reconciled successfully")
 	return ctrl.Result{}, nil
 }
