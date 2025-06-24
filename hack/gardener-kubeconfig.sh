@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Check if the CLI argument for GARDENER_KUBECONFIG is provided
 if [ -z "$1" ]; then
   echo "Usage: $0 <path_to_kubeconfig>"

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Image URL to use all building/pushing image targets
 IMG ?= localhost:5001/cluster-api-provider-gardener/controller:latest
 GARDENER_KUBECONFIG ?= ./bin/gardener/example/provider-local/seed-kind/base/kubeconfig
@@ -49,7 +53,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 .PHONY: deepcopy
 deepcopy: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/...;./cmd/...;./internal/..."
+	$(CONTROLLER_GEN) object:headerFile="hack/LICENSE_BOILERPLATE.txt" paths="./api/...;./cmd/...;./internal/..."
 
 .PHONY: generate
 generate: controller-gen manifests deepcopy fmt lint-fix format vet ## Generate and reformat code.

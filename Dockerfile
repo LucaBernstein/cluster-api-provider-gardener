@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the manager binary
 FROM docker.io/golang:1.24 AS builder
 ARG TARGETOS
