@@ -47,6 +47,9 @@ help: ## Display this help.
 
 ##@ Development
 
+.PHONY: verify-extended
+verify-extended: check test ## Generate and reformat code, run tests
+
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd:allowDangerousTypes=true webhook paths="./api/...;./cmd/...;./internal/..." output:crd:artifacts:config=config/crd/bases
