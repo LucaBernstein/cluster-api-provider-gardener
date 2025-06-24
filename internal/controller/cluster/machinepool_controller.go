@@ -19,11 +19,13 @@ import (
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 )
 
+// MachinePoolController is a controller for managing MachinePool resources.
 type MachinePoolController struct {
 	Client client.Client
 	Scheme *runtime.Scheme
 }
 
+// Reconcile reconciles the MachinePool resource.
 func (r *MachinePoolController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := runtimelog.FromContext(ctx).WithValues("machinepool-object", req.NamespacedName, "cluster", req.ClusterName)
 	log.Info("Getting MachinePool")
@@ -109,6 +111,7 @@ func ensureMachinePoolOwnerRef(ctx context.Context, c client.Client, obj metav1.
 	return fmt.Errorf("object does not implement client.Object")
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *MachinePoolController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.MachinePool{}).

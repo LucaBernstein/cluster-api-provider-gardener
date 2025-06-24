@@ -10,8 +10,11 @@ import (
 )
 
 const (
-	GSCReferenceNamespaceKey     = "infrastructure.cluster.x-k8s.io/gsc_namespace"
-	GSCReferenceNameKey          = "infrastructure.cluster.x-k8s.io/gsc_name"
+	// GSCReferenceNamespaceKey is the key used to store the namespace of the Gardener Shoot Cluster in the Cluster object.
+	GSCReferenceNamespaceKey = "infrastructure.cluster.x-k8s.io/gsc_namespace"
+	// GSCReferenceNameKey is the key used to store the name of the Gardener Shoot Cluster in the Cluster object.
+	GSCReferenceNameKey = "infrastructure.cluster.x-k8s.io/gsc_name"
+	// GSCReferecenceClusterNameKey is the key used to store the name of the Gardener Shoot Cluster in the ControlPlane object.
 	GSCReferecenceClusterNameKey = "controlplane.cluster.x-k8s.io/gsc_cluster"
 )
 

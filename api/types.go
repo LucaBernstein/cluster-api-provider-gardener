@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	// Scheme is the global scheme for the Gardener provider.
 	// TODO(tobschli,LucaBernstein): Fine-grain scheme scopes.
 	Scheme = runtime.NewScheme()
 )

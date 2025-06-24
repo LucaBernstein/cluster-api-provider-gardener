@@ -12,8 +12,11 @@ import (
 )
 
 const (
-	GSCPReferenceNamespaceKey   = "controlplane.cluster.x-k8s.io/gscp_namespace"
-	GSCPReferenceNameKey        = "controlplane.cluster.x-k8s.io/gscp_name"
+	// GSCPReferenceNamespaceKey is the key used to store the namespace of the GardenerShootControlPlane in a reference.
+	GSCPReferenceNamespaceKey = "controlplane.cluster.x-k8s.io/gscp_namespace"
+	// GSCPReferenceNameKey is the key used to store the name of the GardenerShootControlPlane in a reference.
+	GSCPReferenceNameKey = "controlplane.cluster.x-k8s.io/gscp_name"
+	// GSCPReferenceClusterNameKey is the key used to store the name of the cluster in a reference.
 	GSCPReferenceClusterNameKey = "controlplane.cluster.x-k8s.io/gscp_cluster"
 )
 

@@ -54,7 +54,7 @@ type GardenerShootClusterCustomValidator struct {
 var _ webhook.CustomValidator = &GardenerShootClusterCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootCluster.
-func (v *GardenerShootClusterCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootClusterCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	_, ok := obj.(*infrastructurev1alpha1.GardenerShootCluster)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerShootCluster object but got %T", obj)
@@ -64,7 +64,7 @@ func (v *GardenerShootClusterCustomValidator) ValidateCreate(ctx context.Context
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootCluster.
-func (v *GardenerShootClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootClusterCustomValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
 	shootCluster, ok := newObj.(*infrastructurev1alpha1.GardenerShootCluster)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerShootCluster object for the newObj but got %T", newObj)
@@ -97,7 +97,7 @@ func (v *GardenerShootClusterCustomValidator) ValidateUpdate(ctx context.Context
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootCluster.
-func (v *GardenerShootClusterCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootClusterCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	_, ok := obj.(*infrastructurev1alpha1.GardenerShootCluster)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerShootCluster object but got %T", obj)

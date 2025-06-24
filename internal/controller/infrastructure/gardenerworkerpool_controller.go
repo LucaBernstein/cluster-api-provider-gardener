@@ -292,6 +292,7 @@ func (r *GardenerWorkerPoolReconciler) SetupWithManager(mgr ctrl.Manager, target
 	return controller.Complete(kcp.WithClusterInContext(r))
 }
 
+// MapShootToGardenerWorkerPoolObject maps a Shoot object to a list of GardenerWorkerPool reconcile requests.
 func (r *GardenerWorkerPoolReconciler) MapShootToGardenerWorkerPoolObject(ctx context.Context, obj client.Object) []reconcile.Request {
 	var (
 		log         = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))

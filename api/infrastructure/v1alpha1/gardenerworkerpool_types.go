@@ -13,10 +13,14 @@ import (
 )
 
 const (
-	GSWReferenceNamespaceKey   = "infrastructure.cluster.x-k8s.io/gsw_namespace"
-	GSWReferenceNamePrefix     = "infrastructure.cluster.x-k8s.io/gsw_name-"
+	// GSWReferenceNamespaceKey is the key for the namespace in which the Gardener worker pool is referenced.
+	GSWReferenceNamespaceKey = "infrastructure.cluster.x-k8s.io/gsw_namespace"
+	// GSWReferenceNamePrefix is the prefix for the name of the Gardener worker pool.
+	GSWReferenceNamePrefix = "infrastructure.cluster.x-k8s.io/gsw_name-"
+	// GSWReferenceClusterNameKey is the key for the name of the Gardener worker pool in the ControlPlane object.
 	GSWReferenceClusterNameKey = "infrastructure.cluster.x-k8s.io/gsw_cluster"
-	GSWTrue                    = "true"
+	// GSWTrue is a string representation of the boolean value true, used for annotations.
+	GSWTrue = "true"
 )
 
 // GardenerWorkerPoolSpec defines the desired state of GardenerWorkerPool.

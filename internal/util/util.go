@@ -17,6 +17,7 @@ import (
 	infrastructurev1alpha1 "github.com/gardener/cluster-api-provider-gardener/api/infrastructure/v1alpha1"
 )
 
+// ShootNameFromCAPIResources generates a NamespacedName for the Shoot resource based on the provided CAPI resources.
 func ShootNameFromCAPIResources(cluster clusterv1beta1.Cluster, controlPlane controlplanev1alpha1.GardenerShootControlPlane) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      cluster.Name,
@@ -24,6 +25,7 @@ func ShootNameFromCAPIResources(cluster clusterv1beta1.Cluster, controlPlane con
 	}
 }
 
+// ShootFromCAPIResources creates a new Shoot resource based on the provided CAPI resources.
 func ShootFromCAPIResources(
 	capiCluster clusterv1beta1.Cluster,
 	controlPlane controlplanev1alpha1.GardenerShootControlPlane,
@@ -78,6 +80,7 @@ func ShootFromCAPIResources(
 	}
 }
 
+// SyncShootSpecFromGSCP syncs the Shoot spec from the GardenerShootControlPlane spec.
 func SyncShootSpecFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
 	shoot.Spec.Addons = controlPlane.Spec.Addons
 	shoot.Spec.DNS = controlPlane.Spec.DNS
@@ -98,6 +101,7 @@ func SyncShootSpecFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *contr
 	shoot.Spec.SchedulerName = controlPlane.Spec.SchedulerName
 }
 
+// SyncGSCPSpecFromShoot syncs the GardenerShootControlPlane spec from the Shoot spec.
 func SyncGSCPSpecFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
 	controlPlane.Spec.Addons = shoot.Spec.Addons
 	controlPlane.Spec.DNS = shoot.Spec.DNS
@@ -118,6 +122,7 @@ func SyncGSCPSpecFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *contr
 	controlPlane.Spec.AccessRestrictions = shoot.Spec.AccessRestrictions
 }
 
+// SyncShootSpecFromCluster syncs the Shoot spec from the GardenerShootCluster spec.
 func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
 	shoot.Spec.Hibernation = infraCluster.Spec.Hibernation
 	shoot.Spec.Maintenance = infraCluster.Spec.Maintenance
@@ -126,6 +131,7 @@ func SyncShootSpecFromCluster(shoot *gardenercorev1beta1.Shoot, infraCluster *in
 	shoot.Spec.SeedSelector = infraCluster.Spec.SeedSelector
 }
 
+// SyncClusterSpecFromShoot syncs the GardenerShootCluster spec from the Shoot spec.
 func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, infraCluster *infrastructurev1alpha1.GardenerShootCluster) {
 	infraCluster.Spec.Hibernation = shoot.Spec.Hibernation
 	infraCluster.Spec.Maintenance = shoot.Spec.Maintenance
@@ -134,6 +140,7 @@ func SyncClusterSpecFromShoot(shoot *gardenercorev1beta1.Shoot, infraCluster *in
 	infraCluster.Spec.SeedSelector = shoot.Spec.SeedSelector
 }
 
+// SyncShootProviderFromGSCP syncs the Shoot provider configuration from the GardenerShootControlPlane provider configuration.
 func SyncShootProviderFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
 	shoot.Spec.Provider.Type = controlPlane.Spec.Provider.Type
 	shoot.Spec.Provider.ControlPlaneConfig = controlPlane.Spec.Provider.ControlPlaneConfig
@@ -141,6 +148,7 @@ func SyncShootProviderFromGSCP(shoot *gardenercorev1beta1.Shoot, controlPlane *c
 	shoot.Spec.Provider.WorkersSettings = controlPlane.Spec.Provider.WorkersSettings
 }
 
+// SyncGSCPProviderFromShoot syncs the GardenerShootControlPlane provider configuration from the Shoot provider configuration.
 func SyncGSCPProviderFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *controlplanev1alpha1.GardenerShootControlPlane) {
 	controlPlane.Spec.Provider.Type = shoot.Spec.Provider.Type
 	controlPlane.Spec.Provider.ControlPlaneConfig = shoot.Spec.Provider.ControlPlaneConfig
@@ -148,6 +156,7 @@ func SyncGSCPProviderFromShoot(shoot *gardenercorev1beta1.Shoot, controlPlane *c
 	controlPlane.Spec.Provider.WorkersSettings = shoot.Spec.Provider.WorkersSettings
 }
 
+// WorkerConfigFromWorkerPool converts a GardenerWorkerPool to a GardenerWorker configuration.
 func WorkerConfigFromWorkerPool(workerPool *infrastructurev1alpha1.GardenerWorkerPool) *gardenercorev1beta1.Worker {
 	return &gardenercorev1beta1.Worker{
 		Name: workerPool.Name,
@@ -178,6 +187,7 @@ func WorkerConfigFromWorkerPool(workerPool *infrastructurev1alpha1.GardenerWorke
 	}
 }
 
+// SyncShootSpecFromWorkerPool syncs the Shoot spec from the GardenerWorkerPool spec.
 func SyncShootSpecFromWorkerPool(shoot *gardenercorev1beta1.Shoot, workerPool *infrastructurev1alpha1.GardenerWorkerPool) {
 	workers := shoot.Spec.Provider.Workers
 	for i, worker := range workers {
@@ -188,6 +198,7 @@ func SyncShootSpecFromWorkerPool(shoot *gardenercorev1beta1.Shoot, workerPool *i
 	}
 }
 
+// SyncWorkerPoolFromShootSpec syncs the GardenerWorkerPool spec from the Shoot spec.
 func SyncWorkerPoolFromShootSpec(shoot *gardenercorev1beta1.Shoot, workerPool *infrastructurev1alpha1.GardenerWorkerPool) {
 	workers := shoot.Spec.Provider.Workers
 	for _, worker := range workers {
@@ -220,6 +231,7 @@ func SyncWorkerPoolFromShootSpec(shoot *gardenercorev1beta1.Shoot, workerPool *i
 	}
 }
 
+// ShootFromCluster retrieves the Shoot resource from the Gardener API based on the provided Cluster and ControlPlane references.
 func ShootFromCluster(ctx context.Context, gardenerClient client.Client, client client.Client, cluster *clusterv1beta1.Cluster) (*gardenercorev1beta1.Shoot, error) {
 	log := runtimelog.FromContext(ctx).WithValues("operation", "shootFromCluster")
 
@@ -248,12 +260,12 @@ func ShootFromCluster(ctx context.Context, gardenerClient client.Client, client 
 	return shoot, nil
 }
 
+// GetMachinePoolForWorkerPool retrieves the MachinePool that owns the given GardenerWorkerPool.
 func GetMachinePoolForWorkerPool(ctx context.Context, c client.Client, workerPool *infrastructurev1alpha1.GardenerWorkerPool) (*expclusterv1.MachinePool, error) {
 	log := runtimelog.FromContext(ctx).WithValues("operation", "GetMachinePoolForWorkerPool")
 	machinePool := &expclusterv1.MachinePool{}
 	for _, owner := range workerPool.OwnerReferences {
 		if owner.Kind == "MachinePool" && owner.APIVersion == expclusterv1.GroupVersion.String() {
-
 			if err := c.Get(ctx, client.ObjectKey{Namespace: workerPool.Namespace, Name: owner.Name}, machinePool); err != nil {
 				if apierrors.IsNotFound(err) {
 					log.Info("MachinePool not found or already deleted")
@@ -269,18 +281,22 @@ func GetMachinePoolForWorkerPool(ctx context.Context, c client.Client, workerPoo
 	return machinePool, nil
 }
 
+// IsShootSpecEqual checks if the original and updated GardenerShoot specs are equal.
 func IsShootSpecEqual(original, updated *gardenercorev1beta1.Shoot) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }
 
+// IsClusterSpecEqual checks if the original and updated GardenerShootCluster specs are equal.
 func IsClusterSpecEqual(original, updated *infrastructurev1alpha1.GardenerShootCluster) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }
 
+// IsControlPlaneSpecEqual checks if the original and updated GardenerShootControlPlane specs are equal.
 func IsControlPlaneSpecEqual(original, updated *controlplanev1alpha1.GardenerShootControlPlane) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }
 
+// IsWorkerPoolSpecEqual checks if the original and updated GardenerWorkerPool specs are equal.
 func IsWorkerPoolSpecEqual(original, updated *infrastructurev1alpha1.GardenerWorkerPool) bool {
 	return apiequality.Semantic.DeepEqual(original.Spec, updated.Spec)
 }

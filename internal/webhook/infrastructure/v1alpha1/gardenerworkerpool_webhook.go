@@ -53,7 +53,7 @@ type GardenerWorkerPoolCustomValidator struct {
 var _ webhook.CustomValidator = &GardenerWorkerPoolCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type GardenerWorkerPool.
-func (v *GardenerWorkerPoolCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerWorkerPoolCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	_, ok := obj.(*infrastructurev1alpha1.GardenerWorkerPool)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerWorkerPool object but got %T", obj)
@@ -63,7 +63,7 @@ func (v *GardenerWorkerPoolCustomValidator) ValidateCreate(ctx context.Context, 
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type GardenerWorkerPool.
-func (v *GardenerWorkerPoolCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerWorkerPoolCustomValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
 	workerPool, ok := newObj.(*infrastructurev1alpha1.GardenerWorkerPool)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerWorkerPool object for the newObj but got %T", newObj)
@@ -101,7 +101,7 @@ func (v *GardenerWorkerPoolCustomValidator) ValidateUpdate(ctx context.Context, 
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type GardenerWorkerPool.
-func (v *GardenerWorkerPoolCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerWorkerPoolCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	_, ok := obj.(*infrastructurev1alpha1.GardenerWorkerPool)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerWorkerPool object but got %T", obj)

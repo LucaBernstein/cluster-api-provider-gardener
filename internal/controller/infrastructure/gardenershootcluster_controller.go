@@ -32,6 +32,7 @@ import (
 	providerutil "github.com/gardener/cluster-api-provider-gardener/internal/util"
 )
 
+// GardenerShootClusterReconciler reconciles a GardenerShootCluster object.
 type GardenerShootClusterReconciler struct {
 	Client         client.Client
 	GardenerClient client.Client
@@ -45,6 +46,7 @@ type GardenerShootClusterReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gardenershootclusters/finalizers,verbs=update
 
+// Reconcile reconciles and syncs the GardenerShootCluster resource with the corresponding Shoot resource.
 func (r *GardenerShootClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := runtimelog.FromContext(ctx).WithValues("gardenershootcluster", req.NamespacedName, "cluster", req.ClusterName)
 
@@ -235,6 +237,7 @@ func (r *GardenerShootClusterReconciler) syncSpecs(ctx context.Context, infraClu
 	return nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targetCluster controllerRuntimeCluster.Cluster) error {
 	name := "gardenershootcluster"
 	controller := ctrl.NewControllerManagedBy(mgr)
@@ -255,6 +258,7 @@ func (r *GardenerShootClusterReconciler) SetupWithManager(mgr ctrl.Manager, targ
 	return controller.Complete(kcp.WithClusterInContext(r))
 }
 
+// MapShootToGardenerShootClusterObject maps a Shoot object to a GardenerShootCluster object for reconciliation.
 func (r *GardenerShootClusterReconciler) MapShootToGardenerShootClusterObject(ctx context.Context, obj client.Object) []reconcile.Request {
 	var (
 		log          = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))

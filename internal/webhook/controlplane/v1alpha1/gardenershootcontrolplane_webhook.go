@@ -45,7 +45,8 @@ type GardenerShootControlPlaneCustomDefaulter struct {
 
 var _ webhook.CustomDefaulter = &GardenerShootControlPlaneCustomDefaulter{}
 
-func (d GardenerShootControlPlaneCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type GardenerShootControlPlane.
+func (d GardenerShootControlPlaneCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
 	shootControlPlane, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
 	if !ok {
 		return fmt.Errorf("expected a GardenerShootControlPlane object for the obj but got %T", obj)
@@ -75,14 +76,14 @@ type GardenerShootControlPlaneCustomValidator struct {
 var _ webhook.CustomValidator = &GardenerShootControlPlaneCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootControlPlane.
-func (v *GardenerShootControlPlaneCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootControlPlaneCustomValidator) ValidateCreate(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
 	// Do not validate anything here, as the shoot does not exist, and all CAPI resources need to be put together to
 	// initially create the shoot spec.
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootControlPlane.
-func (v *GardenerShootControlPlaneCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootControlPlaneCustomValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
 	shootControlPlane, ok := newObj.(*controlplanev1alpha1.GardenerShootControlPlane)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerShootControlPlane object for the newObj but got %T", newObj)
@@ -106,7 +107,7 @@ func (v *GardenerShootControlPlaneCustomValidator) ValidateUpdate(ctx context.Co
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type GardenerShootControlPlane.
-func (v *GardenerShootControlPlaneCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *GardenerShootControlPlaneCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	_, ok := obj.(*controlplanev1alpha1.GardenerShootControlPlane)
 	if !ok {
 		return nil, fmt.Errorf("expected a GardenerShootControlPlane object but got %T", obj)

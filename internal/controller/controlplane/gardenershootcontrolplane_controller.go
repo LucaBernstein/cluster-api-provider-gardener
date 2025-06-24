@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -44,6 +43,7 @@ import (
 )
 
 const (
+	// KubeConfigValiditySeconds defines the validity of the kubeconfig in seconds.
 	KubeConfigValiditySeconds = 6000
 )
 
@@ -57,6 +57,7 @@ type GardenerShootControlPlaneReconciler struct {
 	PrioritizeShoot bool
 }
 
+// ControlPlaneContext holds the context for the GardenerShootControlPlane reconciler.
 type ControlPlaneContext struct {
 	ctx context.Context
 
@@ -392,7 +393,7 @@ func isKubeConfigValid(data map[string][]byte) (bool, error) {
 	return time.Now().Add(5 * time.Minute).Before(validityTimeStamp), nil
 }
 
-func newEmptyShootAccessSecret(cluster *v1beta1.Cluster) *v1.Secret {
+func newEmptyShootAccessSecret(cluster *clusterv1beta1.Cluster) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-kubeconfig", cluster.Name),
@@ -533,6 +534,7 @@ func (r *GardenerShootControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager,
 	return controller.Complete(kcp.WithClusterInContext(r))
 }
 
+// MapShootToControlPlaneObject maps a Shoot object to a GardenerShootControlPlane object.
 func (r *GardenerShootControlPlaneReconciler) MapShootToControlPlaneObject(ctx context.Context, obj client.Object) []reconcile.Request {
 	var (
 		log          = runtimelog.FromContext(ctx).WithValues("shoot", client.ObjectKeyFromObject(obj))

@@ -27,6 +27,7 @@ type ClusterController struct {
 	Scheme *runtime.Scheme
 }
 
+// Reconcile reconciles the Cluster resource.
 func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := runtimelog.FromContext(ctx).WithValues("cluster-object", req.NamespacedName, "cluster", req.ClusterName)
 
@@ -134,7 +135,7 @@ func (r *ClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		ControlPlaneReady:   gscp.Status.Initialized,
 		ObservedGeneration:  cluster.Generation,
 	}
-	if !(gscp.Status.Initialized && infraCluster.Status.Ready) {
+	if !gscp.Status.Initialized || !infraCluster.Status.Ready {
 		cluster.Status.Phase = string(v1beta1.ClusterPhaseProvisioning)
 	}
 	if err := r.Client.Status().Update(ctx, &cluster); err != nil {
@@ -177,6 +178,7 @@ func ensureOwnerRef(ctx context.Context, c client.Client, obj metav1.Object, clu
 	return fmt.Errorf("object does not implement client.Object")
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *ClusterController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.Cluster{}).
