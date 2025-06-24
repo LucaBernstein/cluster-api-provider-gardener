@@ -12,6 +12,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/gardener/cluster-api-provider-gardener/test/utils"
 )
@@ -36,6 +38,7 @@ var (
 // CertManager.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
+	ctrl.SetLogger(zap.New(zap.WriteTo(GinkgoWriter)))
 	_, _ = fmt.Fprintf(GinkgoWriter, "Starting cluster-api-provider-gardener integration test suite\n")
 	RunSpecs(t, "e2e suite")
 }
